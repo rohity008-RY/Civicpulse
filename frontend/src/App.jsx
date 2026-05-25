@@ -2,15 +2,18 @@ import React, { useMemo, useState } from 'react';
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
+import { motion, useReducedMotion } from 'framer-motion';
 import {
   AlertTriangle,
   ArrowLeft,
   BarChart3,
+  CalendarDays,
   CheckCircle2,
   CircleUserRound,
   Clock3,
   Eye,
   Flame,
+  Lightbulb,
   ListFilter,
   Loader2,
   LocateFixed,
@@ -23,6 +26,7 @@ import {
   ShieldCheck,
   Siren,
   ThumbsUp,
+  Trophy,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from './utils/api';
@@ -55,6 +59,69 @@ const DEFAULT_LOCATION = {
   lng: 72.8777,
   location_label: 'Mumbai',
 };
+
+const DAILY_PUZZLES = [
+  {
+    title: 'Pothole priority',
+    prompt: 'A deep pothole sits outside a school gate. What detail makes the report fastest to act on?',
+    choices: ['Exact gate or landmark', 'Angry caption only', 'No category selected'],
+    answer: 0,
+    note: 'Precise landmarks help crews route the issue without back-and-forth.',
+  },
+  {
+    title: 'Water leak clue',
+    prompt: 'A pipe has been leaking for two days. Which photo is most useful?',
+    choices: ['Close-up of water source', 'Selfie far from leak', 'Random street view'],
+    answer: 0,
+    note: 'A clear source photo helps separate pipe leaks from drainage overflow.',
+  },
+  {
+    title: 'Streetlight check',
+    prompt: 'Two streetlights are out on the same lane. What should the issue title include?',
+    choices: ['Pole numbers or nearest shop', 'Only “bad road”', 'No location label'],
+    answer: 0,
+    note: 'Pole numbers or a nearby shop make night-safety reports easier to verify.',
+  },
+  {
+    title: 'Garbage escalation',
+    prompt: 'A garbage pile keeps returning after cleanup. What makes the report stronger?',
+    choices: ['Repeat timing and location', 'Only one-word title', 'Unrelated image'],
+    answer: 0,
+    note: 'Repeat timing shows pattern, not just a one-time pickup request.',
+  },
+  {
+    title: 'Tree hazard call',
+    prompt: 'A branch is leaning over a busy footpath. Which category fits best?',
+    choices: ['TREE', 'WATER', 'OTHER'],
+    answer: 0,
+    note: 'Correct category gets the report to the right operational queue.',
+  },
+];
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 18 },
+  visible: { opacity: 1, y: 0 },
+};
+
+const stagger = {
+  visible: { transition: { staggerChildren: 0.08 } },
+};
+
+function useMotionProps() {
+  const reduced = useReducedMotion();
+  return reduced
+    ? { initial: false, animate: undefined, variants: undefined }
+    : { initial: 'hidden', animate: 'visible', variants: fadeUp };
+}
+
+function getDailyPuzzle() {
+  const start = new Date('2026-01-01T00:00:00+05:30').getTime();
+  const day = Math.floor((Date.now() - start) / 86400000);
+  return {
+    key: `civic-puzzle-${day}`,
+    puzzle: DAILY_PUZZLES[Math.abs(day) % DAILY_PUZZLES.length],
+  };
+}
 
 function AppShell({ children }) {
   const { isAuthenticated, user, logout } = useAuthStore();
@@ -103,6 +170,7 @@ function AppShell({ children }) {
 }
 
 function StatStrip() {
+  const motionProps = useMotionProps();
   const { data, isLoading } = useQuery({
     queryKey: ['feed-stats'],
     queryFn: () => api.get('/api/feed/stats').then((r) => r.data),
@@ -118,17 +186,132 @@ function StatStrip() {
   return (
     <section className="stats-grid" aria-label="CivicPulse statistics">
       {stats.map(({ label, value, icon: Icon }) => (
-        <div className="stat-card" key={label}>
+        <motion.div className="stat-card" key={label} {...motionProps} whileHover={{ y: -4 }}>
           <Icon size={18} />
           <span>{isLoading ? '...' : value}</span>
           <small>{label}</small>
-        </div>
+        </motion.div>
       ))}
     </section>
   );
 }
 
+function PortalHero() {
+  const reduced = useReducedMotion();
+
+  return (
+    <motion.section
+      className="portal-hero"
+      initial={reduced ? false : { opacity: 0, y: 20 }}
+      animate={reduced ? undefined : { opacity: 1, y: 0 }}
+      transition={{ duration: 0.55, ease: 'easeOut' }}
+    >
+      <div className="hero-copy">
+        <p className="eyebrow">Citizen portal</p>
+        <h1>Raise civic issues and keep your ward moving</h1>
+        <p className="lede">
+          Report potholes, leaks, garbage, safety hazards, and streetlight problems from one public dashboard.
+        </p>
+        <div className="hero-actions">
+          <Link className="button primary large" to="/raise">
+            <Siren size={18} />
+            Raise issue
+          </Link>
+          <a className="button secondary large" href="#daily-puzzle">
+            <Trophy size={18} />
+            Daily puzzle
+          </a>
+        </div>
+      </div>
+
+      <motion.figure
+        className="hero-image-card"
+        initial={reduced ? false : { opacity: 0, scale: 0.97 }}
+        animate={reduced ? undefined : { opacity: 1, scale: 1 }}
+        transition={{ duration: 0.7, delay: 0.08, ease: 'easeOut' }}
+      >
+        <img src="/civic-hero.png" alt="Citizens documenting a pothole on a Mumbai street" />
+        <figcaption>
+          <span><MapPin size={14} /> Mumbai</span>
+          <strong>Community report in progress</strong>
+        </figcaption>
+      </motion.figure>
+    </motion.section>
+  );
+}
+
+function DailyPuzzleCard() {
+  const reduced = useReducedMotion();
+  const { key, puzzle } = getDailyPuzzle();
+  const [selected, setSelected] = useState(() => {
+    const stored = window.localStorage.getItem(key);
+    return stored === null ? null : Number(stored);
+  });
+
+  const solved = selected === puzzle.answer;
+
+  const choose = (index) => {
+    setSelected(index);
+    window.localStorage.setItem(key, String(index));
+  };
+
+  return (
+    <motion.section
+      id="daily-puzzle"
+      className="daily-puzzle"
+      initial={reduced ? false : { opacity: 0, y: 16 }}
+      whileInView={reduced ? undefined : { opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.35 }}
+      transition={{ duration: 0.45, ease: 'easeOut' }}
+    >
+      <div className="puzzle-header">
+        <span className="puzzle-icon"><Lightbulb size={20} /></span>
+        <div>
+          <p className="eyebrow">Daily civic puzzle</p>
+          <h2>{puzzle.title}</h2>
+        </div>
+        <span className="puzzle-date"><CalendarDays size={15} /> Today</span>
+      </div>
+
+      <p className="puzzle-prompt">{puzzle.prompt}</p>
+
+      <div className="puzzle-options">
+        {puzzle.choices.map((choice, index) => {
+          const picked = selected === index;
+          const right = index === puzzle.answer;
+          const reveal = selected !== null;
+          return (
+            <motion.button
+              key={choice}
+              type="button"
+              className={`puzzle-option ${picked ? 'picked' : ''} ${reveal && right ? 'right' : ''} ${reveal && picked && !right ? 'wrong' : ''}`}
+              onClick={() => choose(index)}
+              whileHover={reduced ? undefined : { x: 4 }}
+              whileTap={reduced ? undefined : { scale: 0.98 }}
+            >
+              <span>{String.fromCharCode(65 + index)}</span>
+              {choice}
+            </motion.button>
+          );
+        })}
+      </div>
+
+      {selected !== null && (
+        <motion.div
+          className={`puzzle-result ${solved ? 'solved' : 'retry'}`}
+          initial={reduced ? false : { opacity: 0, y: 8 }}
+          animate={reduced ? undefined : { opacity: 1, y: 0 }}
+        >
+          <Trophy size={17} />
+          <span>{solved ? 'Nice civic instinct.' : 'Close, but this one needs a sharper report.'} {puzzle.note}</span>
+        </motion.div>
+      )}
+    </motion.section>
+  );
+}
+
 function DashboardPage() {
+  const reduced = useReducedMotion();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [sort, setSort] = useState('newest');
@@ -157,18 +340,37 @@ function DashboardPage() {
   return (
     <AppShell>
       <section className="workspace">
-        <div className="workspace-header">
-          <div>
-            <p className="eyebrow">Live civic feed</p>
-            <h1>Report and track local civic issues</h1>
-          </div>
-          <Link className="button primary large" to="/raise">
-            <Siren size={18} />
-            Raise an issue
-          </Link>
-        </div>
+        <PortalHero />
 
         <StatStrip />
+
+        <div className="portal-grid">
+          <DailyPuzzleCard />
+          <motion.aside
+            className="activity-panel"
+            initial={reduced ? false : { opacity: 0, y: 16 }}
+            whileInView={reduced ? undefined : { opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.35 }}
+          >
+            <p className="eyebrow">Citizen streak</p>
+            <h2>Make civic action a habit</h2>
+            <div className="streak-row">
+              <span>1</span>
+              <span>2</span>
+              <span>3</span>
+              <span>4</span>
+              <span>5</span>
+            </div>
+            <p>Try the daily puzzle, upvote useful reports, and raise clear issues when you spot them.</p>
+          </motion.aside>
+        </div>
+
+        <div className="workspace-header feed-heading">
+          <div>
+            <p className="eyebrow">Live civic feed</p>
+            <h2>Browse recent reports</h2>
+          </div>
+        </div>
 
         <div className="feed-toolbar">
           <label className="search-box">
@@ -199,7 +401,7 @@ function DashboardPage() {
           </label>
         </div>
 
-        <section className="issue-grid" aria-label="Issue feed">
+        <motion.section className="issue-grid" aria-label="Issue feed" variants={stagger} initial={reduced ? false : 'hidden'} animate={reduced ? undefined : 'visible'}>
           {isLoading ? (
             Array.from({ length: 6 }).map((_, index) => <div className="issue-card loading-card" key={index} />)
           ) : issues.length ? (
@@ -207,13 +409,14 @@ function DashboardPage() {
           ) : (
             <EmptyState />
           )}
-        </section>
+        </motion.section>
       </section>
     </AppShell>
   );
 }
 
 function IssueCard({ issue, onRefresh }) {
+  const reduced = useReducedMotion();
   const { isAuthenticated } = useAuthStore();
   const status = STATUS_LABELS[issue.status] || issue.status || 'Open';
   const created = issue.created_at ? formatDistanceToNow(new Date(issue.created_at), { addSuffix: true }) : '';
@@ -226,7 +429,11 @@ function IssueCard({ issue, onRefresh }) {
   });
 
   return (
-    <article className={`issue-card ${isEscalated ? 'is-escalated' : ''}`}>
+    <motion.article
+      className={`issue-card ${isEscalated ? 'is-escalated' : ''}`}
+      variants={fadeUp}
+      whileHover={reduced ? undefined : { y: -5, transition: { duration: 0.16 } }}
+    >
       <div className="issue-meta">
         <span className="pill category">{CATEGORY_LABELS[issue.category] || 'Other'}</span>
         <span className="pill status">{status}</span>
@@ -265,7 +472,7 @@ function IssueCard({ issue, onRefresh }) {
           View
         </Link>
       </div>
-    </article>
+    </motion.article>
   );
 }
 
