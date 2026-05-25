@@ -11,7 +11,9 @@ import {
   CheckCircle2,
   CircleUserRound,
   Clock3,
+  Database,
   Eye,
+  FileText,
   Flame,
   Lightbulb,
   ListFilter,
@@ -27,6 +29,7 @@ import {
   Siren,
   ThumbsUp,
   Trophy,
+  Upload,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from './utils/api';
@@ -141,6 +144,7 @@ function AppShell({ children }) {
         <nav className="topnav" aria-label="Primary">
           <Link to="/">Feed</Link>
           <Link to="/raise">Raise issue</Link>
+          {user?.role === 'ADMIN' && <Link to="/admin">Admin</Link>}
         </nav>
 
         <div className="top-actions">
@@ -487,7 +491,7 @@ function EmptyState() {
   );
 }
 
-function AuthPanel({ compact = false }) {
+function AuthPanel({ compact = false, redirectTo = '/raise' }) {
   const navigate = useNavigate();
   const { login } = useAuthStore();
   const [mode, setMode] = useState('register');
@@ -505,7 +509,7 @@ function AuthPanel({ compact = false }) {
     onSuccess: (data) => {
       login(data.user, data.token);
       toast.success(mode === 'register' ? 'Account created' : 'Signed in');
-      navigate('/raise');
+      navigate(redirectTo);
     },
     onError: (error) => toast.error(error.response?.data?.error || 'Authentication failed'),
   });
@@ -822,12 +826,182 @@ function IssueDetailPage() {
   );
 }
 
+const SAMPLE_REP_CSV = `state_code,state_name,city,zone_name,ward_number,ward_name,corporator_name,corporator_party,corporator_phone,corporator_email,mla_name,mla_party,mla_constituency,mla_phone,mla_email,term_start,source_url
+MH,Maharashtra,Mumbai,K-West,K-West,Andheri West,Sample Corporator,Independent,,,Sample MLA,Independent,Andheri West,,,2026-01-01,`;
+
+function AdminImportPage() {
+  const { isAuthenticated, user } = useAuthStore();
+  const [importText, setImportText] = useState(SAMPLE_REP_CSV);
+  const [sourceUrl, setSourceUrl] = useState('');
+  const queryClient = useQueryClient();
+
+  const isAdmin = user?.role === 'ADMIN';
+
+  const locations = useQuery({
+    queryKey: ['admin-locations'],
+    queryFn: () => api.get('/api/reps/locations', { params: { limit: 1000 } }).then((r) => r.data),
+    enabled: isAuthenticated,
+  });
+
+  const imports = useQuery({
+    queryKey: ['rep-imports'],
+    queryFn: () => api.get('/api/admin/reps/imports').then((r) => r.data),
+    enabled: isAdmin,
+  });
+
+  const uploadImport = useMutation({
+    mutationFn: async () => {
+      if (sourceUrl.trim() && !importText.trim()) {
+        const { data } = await api.post('/api/admin/reps/import-url', { url: sourceUrl.trim(), format: 'csv' });
+        return data;
+      }
+      const { data } = await api.post('/api/admin/reps/import', {
+        format: 'csv',
+        data: importText,
+        source_url: sourceUrl.trim() || undefined,
+      });
+      return data;
+    },
+    onSuccess: (data) => {
+      const result = data.import;
+      toast.success(`Imported ${result.rows_imported}/${result.rows_received} rows`);
+      queryClient.invalidateQueries({ queryKey: ['admin-locations'] });
+      queryClient.invalidateQueries({ queryKey: ['rep-imports'] });
+    },
+    onError: (error) => toast.error(error.response?.data?.error || 'Import failed'),
+  });
+
+  const readFile = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setImportText(await file.text());
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <AppShell>
+        <section className="auth-page">
+          <div>
+            <p className="eyebrow">Admin access</p>
+            <h1>Sign in as admin to upload representative data</h1>
+            <p className="lede">The import updates state-city-ward records, maps corporators to wards, and maps MLAs through zones.</p>
+          </div>
+          <AuthPanel redirectTo="/admin" />
+        </section>
+      </AppShell>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <AppShell>
+        <section className="detail-page">
+          <div className="notice">
+            <AlertTriangle size={18} />
+            <span>Only ADMIN users can upload representative data.</span>
+          </div>
+        </section>
+      </AppShell>
+    );
+  }
+
+  const wards = locations.data?.wards || [];
+  const latestImports = imports.data?.imports || [];
+
+  return (
+    <AppShell>
+      <section className="admin-layout">
+        <div className="section-heading">
+          <p className="eyebrow">Backend data control</p>
+          <h1>Upload corporator and MLA mapping</h1>
+          <p className="lede">Store data as state → city → ward, assign corporators per ward, and attach MLAs to zones for feed mapping.</p>
+        </div>
+
+        <div className="admin-grid">
+          <form
+            className="admin-panel"
+            onSubmit={(event) => {
+              event.preventDefault();
+              uploadImport.mutate();
+            }}
+          >
+            <div className="panel-title">
+              <Upload size={19} />
+              <h2>Manual import</h2>
+            </div>
+
+            <label>
+              Official source URL
+              <input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} placeholder="https://official-site.gov.in/reps.csv" />
+            </label>
+
+            <label className="file-picker">
+              <FileText size={18} />
+              Upload CSV file
+              <input type="file" accept=".csv,.txt,.json" onChange={readFile} />
+            </label>
+
+            <label>
+              CSV / JSON rows
+              <textarea rows={12} value={importText} onChange={(event) => setImportText(event.target.value)} />
+            </label>
+
+            <button className="button primary submit-button" type="submit" disabled={uploadImport.isPending}>
+              {uploadImport.isPending ? <Loader2 size={18} className="spin" /> : <Database size={18} />}
+              Import and map data
+            </button>
+          </form>
+
+          <aside className="admin-panel">
+            <div className="panel-title">
+              <Database size={19} />
+              <h2>Current mapping</h2>
+            </div>
+            <div className="mapping-stats">
+              <span><strong>{wards.length}</strong><small>wards loaded</small></span>
+              <span><strong>{new Set(wards.map((ward) => ward.city)).size}</strong><small>cities</small></span>
+              <span><strong>{new Set(wards.map((ward) => ward.state_code)).size}</strong><small>states</small></span>
+            </div>
+            <div className="mapping-list">
+              {wards.slice(0, 12).map((ward) => (
+                <div key={ward.id} className="mapping-row">
+                  <strong>{ward.name}</strong>
+                  <small>{[ward.ward_number, ward.city, ward.state_name].filter(Boolean).join(' · ')}</small>
+                  <span>{ward.corporators?.[0]?.name || 'No corporator mapped'}</span>
+                </div>
+              ))}
+            </div>
+          </aside>
+        </div>
+
+        <section className="admin-panel">
+          <div className="panel-title">
+            <Clock3 size={19} />
+            <h2>Recent imports</h2>
+          </div>
+          <div className="import-history">
+            {latestImports.map((batch) => (
+              <div key={batch.id} className="mapping-row">
+                <strong>{batch.rows_imported}/{batch.rows_received} rows imported</strong>
+                <small>{new Date(batch.created_at).toLocaleString()}</small>
+                <span>{batch.source_url || batch.format}</span>
+              </div>
+            ))}
+            {!latestImports.length && <p className="lede">No imports yet.</p>}
+          </div>
+        </section>
+      </section>
+    </AppShell>
+  );
+}
+
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<DashboardPage />} />
       <Route path="/raise" element={<RaiseIssuePage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/admin" element={<AdminImportPage />} />
       <Route path="/issues/:id" element={<IssueDetailPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

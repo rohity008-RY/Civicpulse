@@ -97,8 +97,40 @@ router.post('/social', async (req, res) => {
 router.get('/me', authenticate, async (req, res) => {
   try {
     const { data: user } = await supabase.from('users')
-      .select('*, wards(name, zone_id)')
+      .select('*, wards(id, name, ward_number, city, state_name, zone_id)')
       .eq('id', req.user.id).single();
+    res.json({ user: sanitizeUser(user) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Update current user profile/home ward ───────────────────
+router.put('/me', authenticate, async (req, res) => {
+  try {
+    const updates = {};
+    const { name, phone, avatar_url, home_ward_id } = req.body;
+
+    if (name !== undefined) updates.name = String(name).trim();
+    if (phone !== undefined) updates.phone = phone ? String(phone).trim() : null;
+    if (avatar_url !== undefined) updates.avatar_url = avatar_url ? String(avatar_url).trim() : null;
+    if (home_ward_id !== undefined) {
+      if (home_ward_id) {
+        const { data: ward } = await supabase.from('wards').select('id').eq('id', home_ward_id).maybeSingle();
+        if (!ward) return res.status(400).json({ error: 'Invalid home_ward_id' });
+      }
+      updates.home_ward_id = home_ward_id || null;
+    }
+
+    if (updates.name === '') return res.status(400).json({ error: 'Name cannot be empty' });
+
+    const { data: user, error } = await supabase.from('users')
+      .update(updates)
+      .eq('id', req.user.id)
+      .select('*, wards(id, name, ward_number, city, state_name, zone_id)')
+      .single();
+
+    if (error) throw error;
     res.json({ user: sanitizeUser(user) });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -114,7 +146,8 @@ router.put('/fcm-token', authenticate, async (req, res) => {
 
 const sanitizeUser = (u) => ({
   id: u.id, name: u.name, email: u.email, phone: u.phone,
-  role: u.role, avatar_url: u.avatar_url, home_ward_id: u.home_ward_id
+  role: u.role, avatar_url: u.avatar_url, home_ward_id: u.home_ward_id,
+  home_ward: u.wards || null
 });
 
 module.exports = router;

@@ -6,10 +6,11 @@ const { optionalAuth } = require('../middleware/auth');
 // ─── GET /api/feed/home ───────────────────────────────────────
 router.get('/home', optionalAuth, async (req, res) => {
   try {
-    const { ward_id, category, sort = 'newest', page = 1, limit = 20 } = req.query;
+    const { ward_id, state_code, city, category, sort = 'newest', page = 1, limit = 20 } = req.query;
 
     let query = supabase.from('issues')
       .select(`id, title, category, status, location_label, created_at,
+               state_code, state_name, city, ward_number,
                upvote_count, comment_count, share_count, trending_score, trending_rank,
                is_community_spotlight, escalated_at, escalated_to_role,
                sla_deadline, is_anonymous, source,
@@ -17,11 +18,13 @@ router.get('/home', optionalAuth, async (req, res) => {
                issue_media(cdn_url, media_type),
                corporators(name, party, photo_url),
                mlas(name, party, photo_url),
-               wards(name)`)
+               wards(name, ward_number, city, state_name)`)
       .neq('status', 'CLOSED')
       .range((page - 1) * limit, page * limit - 1);
 
     if (ward_id)  query = query.eq('ward_id', ward_id);
+    if (state_code) query = query.eq('state_code', String(state_code).toUpperCase());
+    if (city) query = query.ilike('city', city);
     if (category) query = query.eq('category', category);
 
     switch (sort) {
@@ -51,10 +54,11 @@ router.get('/home', optionalAuth, async (req, res) => {
 // ─── GET /api/feed/escalated ─────────────────────────────────
 router.get('/escalated', optionalAuth, async (req, res) => {
   try {
-    const { zone_id, category, sort = 'trending', page = 1, limit = 20 } = req.query;
+    const { zone_id, state_code, city, category, sort = 'trending', page = 1, limit = 20 } = req.query;
 
     let query = supabase.from('issues')
       .select(`id, title, category, status, location_label, created_at,
+               state_code, state_name, city, ward_number,
                upvote_count, comment_count, share_count, trending_score, trending_rank,
                escalated_at, escalated_to_role, escalated_to_mp_at, sla_deadline,
                users(name, avatar_url),
@@ -62,11 +66,13 @@ router.get('/escalated', optionalAuth, async (req, res) => {
                corporators(name, party, photo_url),
                mlas(id, name, party, photo_url),
                mps(id, name, party, photo_url),
-               wards(name), zones(name)`)
+               wards(name, ward_number, city, state_name), zones(name, city, state_name)`)
       .not('escalated_at', 'is', null)
       .range((page - 1) * limit, page * limit - 1);
 
     if (zone_id)  query = query.eq('zone_id', zone_id);
+    if (state_code) query = query.eq('state_code', String(state_code).toUpperCase());
+    if (city) query = query.ilike('city', city);
     if (category) query = query.eq('category', category);
 
     switch (sort) {
@@ -96,22 +102,25 @@ router.get('/escalated', optionalAuth, async (req, res) => {
 // ─── GET /api/feed/trending ───────────────────────────────────
 router.get('/trending', optionalAuth, async (req, res) => {
   try {
-    const { zone_id, limit = 10 } = req.query;
+    const { zone_id, state_code, city, limit = 10 } = req.query;
 
     let query = supabase.from('issues')
       .select(`id, title, category, status, location_label, created_at,
+               state_code, state_name, city, ward_number,
                upvote_count, comment_count, share_count, trending_score, trending_rank,
                escalated_at, escalated_to_role,
                issue_media(cdn_url, media_type),
                corporators(name, photo_url),
                mlas(name, photo_url), mps(name, photo_url),
-               wards(name), zones(name)`)
+               wards(name, ward_number, city, state_name), zones(name, city, state_name)`)
       .neq('status', 'CLOSED')
       .gt('trending_score', 5)
       .order('trending_score', { ascending: false })
       .limit(limit);
 
     if (zone_id) query = query.eq('zone_id', zone_id);
+    if (state_code) query = query.eq('state_code', String(state_code).toUpperCase());
+    if (city) query = query.ilike('city', city);
 
     const { data: issues, error } = await query;
     if (error) throw error;

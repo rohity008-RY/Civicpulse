@@ -23,20 +23,32 @@ CREATE TYPE notification_type AS ENUM (
 -- ─── ZONES ────────────────────────────────────────────────────
 CREATE TABLE zones (
   id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  state_code   TEXT NOT NULL DEFAULT 'MH',
+  state_name   TEXT NOT NULL DEFAULT 'Maharashtra',
   city         TEXT NOT NULL DEFAULT 'Mumbai',
+  district     TEXT,
   name         TEXT NOT NULL,
+  external_id  TEXT,
+  source_url   TEXT,
   geo_boundary GEOMETRY(POLYGON, 4326),
-  created_at   TIMESTAMPTZ DEFAULT NOW()
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ─── WARDS ────────────────────────────────────────────────────
 CREATE TABLE wards (
   id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   zone_id      UUID NOT NULL REFERENCES zones(id),
+  state_code   TEXT NOT NULL DEFAULT 'MH',
+  state_name   TEXT NOT NULL DEFAULT 'Maharashtra',
+  city         TEXT NOT NULL DEFAULT 'Mumbai',
   name         TEXT NOT NULL,
   ward_number  TEXT,
+  external_id  TEXT,
+  source_url   TEXT,
   geo_boundary GEOMETRY(POLYGON, 4326),
-  created_at   TIMESTAMPTZ DEFAULT NOW()
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ─── USERS ────────────────────────────────────────────────────
@@ -68,28 +80,39 @@ CREATE TABLE corporators (
   phone         TEXT,
   email         TEXT,
   photo_url     TEXT,
+  external_id   TEXT,
+  source_url    TEXT,
+  data_source   TEXT,
   term_start    DATE NOT NULL,
   term_end      DATE,
   is_active     BOOLEAN DEFAULT TRUE,
   injected_by   UUID REFERENCES users(id),
-  injected_at   TIMESTAMPTZ DEFAULT NOW()
+  injected_at   TIMESTAMPTZ DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE mlas (
   id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id       UUID REFERENCES users(id),
   zone_id       UUID NOT NULL REFERENCES zones(id),
+  state_code    TEXT NOT NULL DEFAULT 'MH',
+  state_name    TEXT NOT NULL DEFAULT 'Maharashtra',
+  city          TEXT NOT NULL DEFAULT 'Mumbai',
   name          TEXT NOT NULL,
   party         TEXT,
   constituency  TEXT NOT NULL,
   phone         TEXT,
   email         TEXT,
   photo_url     TEXT,
+  external_id   TEXT,
+  source_url    TEXT,
+  data_source   TEXT,
   term_start    DATE NOT NULL,
   term_end      DATE,
   is_active     BOOLEAN DEFAULT TRUE,
   injected_by   UUID REFERENCES users(id),
-  injected_at   TIMESTAMPTZ DEFAULT NOW()
+  injected_at   TIMESTAMPTZ DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE mps (
@@ -152,6 +175,10 @@ CREATE TABLE issues (
   status                issue_status NOT NULL DEFAULT 'OPEN',
   location              GEOMETRY(POINT, 4326),
   location_label        TEXT,
+  state_code            TEXT,
+  state_name            TEXT,
+  city                  TEXT,
+  ward_number           TEXT,
   ward_id               UUID REFERENCES wards(id),
   zone_id               UUID REFERENCES zones(id),
   corporator_id         UUID REFERENCES corporators(id),
@@ -183,6 +210,7 @@ CREATE INDEX idx_issues_status   ON issues(status);
 CREATE INDEX idx_issues_trending ON issues(trending_score DESC) WHERE status != 'CLOSED';
 CREATE INDEX idx_issues_location ON issues USING GIST(location);
 CREATE INDEX idx_issues_created  ON issues(created_at DESC);
+CREATE INDEX idx_issues_hierarchy ON issues(state_code, city, ward_number);
 
 -- ─── ISSUE MEDIA ──────────────────────────────────────────────
 CREATE TABLE issue_media (
@@ -263,6 +291,19 @@ CREATE TABLE audit_log (
   metadata     JSONB,
   ip_address   TEXT,
   created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE rep_import_batches (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  actor_id      UUID REFERENCES users(id),
+  actor_role    TEXT,
+  source_url    TEXT,
+  format        TEXT NOT NULL,
+  rows_received INTEGER DEFAULT 0,
+  rows_imported INTEGER DEFAULT 0,
+  rows_failed   INTEGER DEFAULT 0,
+  errors        JSONB DEFAULT '[]'::jsonb,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ─── MONTHLY REPORTS (materialised) ─────────────────────────

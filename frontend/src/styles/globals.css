@@ -234,7 +234,8 @@ select:focus {
 .workspace,
 .auth-page,
 .raise-layout,
-.detail-page {
+.detail-page,
+.admin-layout {
   width: min(1180px, calc(100% - 32px));
   margin: 0 auto;
   padding: 34px 0 56px;
@@ -907,6 +908,104 @@ legend {
   max-width: 860px;
 }
 
+.admin-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.admin-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+
+.admin-panel + .admin-panel {
+  margin-top: 16px;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 14px;
+  color: var(--blue);
+}
+
+.panel-title h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 19px;
+}
+
+.file-picker {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px dashed #b7c3d7;
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--panel-2);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.file-picker input {
+  display: none;
+}
+
+.mapping-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.mapping-stats span,
+.mapping-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+
+.mapping-stats span {
+  padding: 12px;
+}
+
+.mapping-stats strong {
+  display: block;
+  font-family: var(--font-head);
+  font-size: 22px;
+  color: var(--ink);
+}
+
+.mapping-stats small,
+.mapping-row small,
+.mapping-row span {
+  color: var(--muted);
+}
+
+.mapping-list,
+.import-history {
+  display: grid;
+  gap: 8px;
+}
+
+.mapping-row {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+}
+
+.mapping-row strong {
+  color: var(--ink);
+}
+
 .detail-card {
   padding: 28px;
 }
@@ -982,7 +1081,8 @@ legend {
   }
 
   .portal-hero,
-  .portal-grid {
+  .portal-grid,
+  .admin-grid {
     grid-template-columns: 1fr;
   }
 
@@ -999,7 +1099,8 @@ legend {
 
   .feed-toolbar,
   .auth-page,
-  .raise-layout {
+  .raise-layout,
+  .admin-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1042,7 +1143,8 @@ legend {
   .workspace,
   .auth-page,
   .raise-layout,
-  .detail-page {
+  .detail-page,
+  .admin-layout {
     width: min(100% - 24px, 1180px);
     padding-top: 22px;
   }
@@ -1051,6 +1153,7 @@ legend {
   .issue-grid,
   .portal-hero,
   .portal-grid,
+  .admin-grid,
   .detail-grid,
   .coordinate-row,
   .location-row {

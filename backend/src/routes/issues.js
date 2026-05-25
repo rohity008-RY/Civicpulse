@@ -3,7 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const supabase = require('../config/supabase');
 const { authenticate, optionalAuth, isRep, isAdminOrMod } = require('../middleware/auth');
-const { resolveRepresentatives } = require('../services/geoService');
+const { resolveRepresentatives, resolveRepresentativesByWard, resolveRepresentativesByHierarchy } = require('../services/geoService');
 const { computeSlaDeadline } = require('../services/slaService');
 const { uploadMedia } = require('../services/mediaService');
 const multer = require('multer');
@@ -12,15 +12,18 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 
 // ─── GET /api/issues — list with filters ─────────────────────
 router.get('/', optionalAuth, async (req, res) => {
   try {
-    const { ward_id, zone_id, category, status, sort = 'created_at', page = 1, limit = 20 } = req.query;
+    const { ward_id, zone_id, state_code, city, category, status, sort = 'created_at', page = 1, limit = 20 } = req.query;
     let query = supabase.from('issues')
       .select(`*, users(name, avatar_url), issue_media(cdn_url, media_type),
-               corporators(name, party, photo_url), mlas(name, party, photo_url)`)
+               corporators(name, party, photo_url), mlas(name, party, photo_url),
+               wards(name, ward_number, city, state_name), zones(name, city, state_name)`)
       .neq('status', 'CLOSED')
       .range((page - 1) * limit, page * limit - 1);
 
     if (ward_id)  query = query.eq('ward_id', ward_id);
     if (zone_id)  query = query.eq('zone_id', zone_id);
+    if (state_code) query = query.eq('state_code', String(state_code).toUpperCase());
+    if (city) query = query.ilike('city', city);
     if (category) query = query.eq('category', category);
     if (status)   query = query.eq('status', status);
 
@@ -75,12 +78,31 @@ router.get('/:id', optionalAuth, async (req, res) => {
 // ─── POST /api/issues — create ────────────────────────────────
 router.post('/', authenticate, upload.array('media', 4), async (req, res) => {
   try {
-    const { title, description, category, lat, lng, location_label, is_anonymous, source } = req.body;
-    if (!title || !category || !lat || !lng)
-      return res.status(400).json({ error: 'title, category, lat, lng required' });
+    const {
+      title, description, category, lat, lng, location_label, is_anonymous, source,
+      ward_id, state_code, state_name, city, ward_number, ward_name
+    } = req.body;
+    if (!title || !category)
+      return res.status(400).json({ error: 'title and category required' });
+
+    const hasPoint = lat !== undefined && lng !== undefined && lat !== '' && lng !== '';
+    if (!hasPoint && !ward_id && !(city && (ward_number || ward_name))) {
+      return res.status(400).json({ error: 'lat/lng or ward selection required' });
+    }
 
     // Resolve ward/zone/reps from GPS
-    const geo = await resolveRepresentatives(parseFloat(lat), parseFloat(lng));
+    let geo;
+    if (ward_id) {
+      geo = await resolveRepresentativesByWard(ward_id);
+    } else if (city && (ward_number || ward_name)) {
+      geo = await resolveRepresentativesByHierarchy({ state_code, state_name, city, ward_number, ward_name });
+      if (!geo.ward_id && hasPoint) {
+        geo = await resolveRepresentatives(parseFloat(lat), parseFloat(lng));
+      }
+    } else {
+      geo = await resolveRepresentatives(parseFloat(lat), parseFloat(lng));
+    }
+
     const sla_deadline = await computeSlaDeadline(geo.ward_id, category);
 
     const issueId = uuidv4();
@@ -89,8 +111,12 @@ router.post('/', authenticate, upload.array('media', 4), async (req, res) => {
       user_id: req.user.id,
       title, description, category,
       status: 'OPEN',
-      location: `POINT(${lng} ${lat})`,
+      location: hasPoint ? `POINT(${lng} ${lat})` : null,
       location_label,
+      state_code: geo.state_code || state_code || null,
+      state_name: geo.state_name || state_name || null,
+      city: geo.city || city || null,
+      ward_number: geo.ward_number || ward_number || null,
       ward_id: geo.ward_id,
       zone_id: geo.zone_id,
       corporator_id: geo.corporator_id,

@@ -3,12 +3,67 @@ const router = express.Router();
 const supabase = require('../config/supabase');
 const { optionalAuth } = require('../middleware/auth');
 
+// GET /api/reps/locations — public state/city/ward hierarchy for manual selection
+router.get('/locations', async (req, res) => {
+  try {
+    const { state_code, city, q, limit = 500 } = req.query;
+
+    let query = supabase
+      .from('wards')
+      .select(`
+        id, name, ward_number, city, state_code, state_name, zone_id,
+        zones(id, name, mla_id),
+        corporators(id, name, party, photo_url, is_active)
+      `)
+      .order('state_name', { ascending: true })
+      .order('city', { ascending: true })
+      .order('ward_number', { ascending: true })
+      .limit(Number(limit));
+
+    if (state_code) query = query.eq('state_code', String(state_code).toUpperCase());
+    if (city) query = query.ilike('city', city);
+    if (q) query = query.or(`name.ilike.%${q}%,ward_number.ilike.%${q}%,city.ilike.%${q}%`);
+
+    const { data: wards, error } = await query;
+    if (error) throw error;
+
+    const activeWards = (wards || []).map((ward) => ({
+      ...ward,
+      corporators: (ward.corporators || []).filter((rep) => rep.is_active),
+    }));
+
+    const stateMap = new Map();
+    activeWards.forEach((ward) => {
+      const stateKey = ward.state_code || ward.state_name || 'UNKNOWN';
+      if (!stateMap.has(stateKey)) {
+        stateMap.set(stateKey, {
+          state_code: ward.state_code,
+          state_name: ward.state_name,
+          cities: new Map(),
+        });
+      }
+      const state = stateMap.get(stateKey);
+      if (!state.cities.has(ward.city)) state.cities.set(ward.city, { name: ward.city, wards: [] });
+      state.cities.get(ward.city).wards.push(ward);
+    });
+
+    const states = Array.from(stateMap.values()).map((state) => ({
+      ...state,
+      cities: Array.from(state.cities.values()),
+    }));
+
+    res.json({ states, wards: activeWards });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/reps/corporators/:id — public profile
 router.get('/corporators/:id', optionalAuth, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('corporators')
-      .select('*, wards(name, zone_id, zones(name))')
+      .select('*, wards(name, ward_number, city, state_name, zone_id, zones(name, city, state_name))')
       .eq('id', req.params.id)
       .single();
     if (error) return res.status(404).json({ error: 'Not found' });
@@ -54,7 +109,7 @@ router.get('/mlas/:id', optionalAuth, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('mlas')
-      .select('*, zones(name)')
+      .select('*, zones(name, city, state_name)')
       .eq('id', req.params.id)
       .single();
     if (error) return res.status(404).json({ error: 'Not found' });
@@ -89,7 +144,7 @@ router.get('/leaderboard', async (req, res) => {
     const monthEnd   = new Date(y, m, 0, 23, 59, 59).toISOString();
 
     let query = supabase.from('corporators')
-      .select('id, name, party, photo_url, wards(id, name, zone_id, zones(name))')
+      .select('id, name, party, photo_url, wards(id, name, ward_number, city, state_name, zone_id, zones(name, city, state_name))')
       .eq('is_active', true);
     if (zone_id) query = query.eq('wards.zone_id', zone_id);
 
@@ -139,21 +194,22 @@ router.get('/ward-lookup', async (req, res) => {
       lng: parseFloat(lng)
     });
 
-    if (error || !data) return res.status(404).json({ error: 'Ward not found for this location' });
+    const ward = Array.isArray(data) ? data[0] : data;
+    if (error || !ward) return res.status(404).json({ error: 'Ward not found for this location' });
 
     // Enrich with rep details
     const { data: corp } = await supabase
       .from('corporators').select('id, name, party, photo_url')
-      .eq('ward_id', data.id).eq('is_active', true).maybeSingle();
+      .eq('ward_id', ward.id).eq('is_active', true).maybeSingle();
 
     const { data: zone } = await supabase
-      .from('zones').select('id, name, mla_id, mp_id').eq('id', data.zone_id).single();
+      .from('zones').select('id, name, city, state_name, mla_id, mp_id').eq('id', ward.zone_id).single();
 
     const { data: mla } = zone?.mla_id
       ? await supabase.from('mlas').select('id, name, party, photo_url').eq('id', zone.mla_id).maybeSingle()
       : { data: null };
 
-    res.json({ ward: data, zone, corporator: corp, mla });
+    res.json({ ward, zone, corporator: corp, mla });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

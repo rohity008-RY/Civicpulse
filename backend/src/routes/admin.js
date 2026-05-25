@@ -4,6 +4,241 @@ const { v4: uuidv4 } = require('uuid');
 const supabase = require('../config/supabase');
 const { authenticate, isAdmin, isAdminOrMod } = require('../middleware/auth');
 
+const IMPORT_HEADERS = [
+  'state_code', 'state_name', 'city', 'zone_name', 'ward_number', 'ward_name',
+  'corporator_name', 'corporator_party', 'corporator_phone', 'corporator_email',
+  'mla_name', 'mla_party', 'mla_constituency', 'mla_phone', 'mla_email',
+  'term_start', 'term_end', 'source_url'
+];
+
+const todayIso = () => new Date().toISOString().slice(0, 10);
+const clean = (value) => String(value ?? '').trim();
+const upper = (value) => clean(value).toUpperCase();
+
+function parseCsvLine(line) {
+  const cells = [];
+  let value = '';
+  let quoted = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    const next = line[i + 1];
+    if (char === '"' && quoted && next === '"') {
+      value += '"';
+      i += 1;
+    } else if (char === '"') {
+      quoted = !quoted;
+    } else if (char === ',' && !quoted) {
+      cells.push(value);
+      value = '';
+    } else {
+      value += char;
+    }
+  }
+
+  cells.push(value);
+  return cells.map(clean);
+}
+
+function parseCsv(text) {
+  const lines = clean(text).split(/\r?\n/).filter((line) => clean(line) && !clean(line).startsWith('#'));
+  if (lines.length < 2) return [];
+  const headers = parseCsvLine(lines[0]).map((header) => header.toLowerCase().replace(/\s+/g, '_'));
+  return lines.slice(1).map((line) => {
+    const cells = parseCsvLine(line);
+    return Object.fromEntries(headers.map((header, index) => [header, cells[index] || '']));
+  });
+}
+
+function normalizeImportRows(body) {
+  if (Array.isArray(body.rows)) return body.rows;
+  const raw = body.csv || body.data || body.text || '';
+  if (Array.isArray(raw)) return raw;
+  if (body.format === 'json') {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : parsed.rows || [];
+  }
+  return parseCsv(raw);
+}
+
+function normalizeRepRow(row) {
+  const normalized = {};
+  IMPORT_HEADERS.forEach((key) => { normalized[key] = clean(row[key]); });
+
+  normalized.state_code = upper(row.state_code || row.state || row.state_abbr || 'MH') || 'MH';
+  normalized.state_name = clean(row.state_name || row.state || 'Maharashtra') || 'Maharashtra';
+  normalized.city = clean(row.city || row.municipality || row.local_body || 'Mumbai') || 'Mumbai';
+  normalized.zone_name = clean(row.zone_name || row.zone || row.assembly_constituency || row.mla_constituency || normalized.city);
+  normalized.ward_number = clean(row.ward_number || row.ward_no || row.ward || row.ward_code);
+  normalized.ward_name = clean(row.ward_name || row.ward_area || row.name || normalized.ward_number);
+  normalized.corporator_name = clean(row.corporator_name || row.corporator || row.councillor_name || row.councillor);
+  normalized.corporator_party = clean(row.corporator_party || row.party || row.councillor_party);
+  normalized.mla_name = clean(row.mla_name || row.mla);
+  normalized.mla_party = clean(row.mla_party || row.assembly_party);
+  normalized.mla_constituency = clean(row.mla_constituency || row.constituency || row.assembly_constituency || normalized.zone_name);
+  normalized.term_start = clean(row.term_start || row.corporator_term_start || row.mla_term_start || todayIso());
+  normalized.term_end = clean(row.term_end || row.corporator_term_end || row.mla_term_end);
+  normalized.source_url = clean(row.source_url || row.source || '');
+  return normalized;
+}
+
+async function findOrCreateZone(row, sourceUrl) {
+  const { data: existing } = await supabase
+    .from('zones')
+    .select('id, name, city, state_code, state_name, mla_id, mp_id')
+    .eq('state_code', row.state_code)
+    .ilike('city', row.city)
+    .ilike('name', row.zone_name)
+    .limit(1)
+    .maybeSingle();
+
+  if (existing) return existing;
+
+  const { data, error } = await supabase.from('zones').insert({
+    id: uuidv4(),
+    state_code: row.state_code,
+    state_name: row.state_name,
+    city: row.city,
+    name: row.zone_name,
+    source_url: sourceUrl || row.source_url || null,
+  }).select('id, name, city, state_code, state_name, mla_id, mp_id').single();
+  if (error) throw error;
+  return data;
+}
+
+async function findOrCreateWard(row, zone, sourceUrl) {
+  let query = supabase
+    .from('wards')
+    .select('id, name, ward_number, city, state_code, state_name, zone_id')
+    .eq('zone_id', zone.id)
+    .limit(1);
+
+  if (row.ward_number) query = query.ilike('ward_number', row.ward_number);
+  else query = query.ilike('name', row.ward_name);
+
+  const { data: existing } = await query.maybeSingle();
+  if (existing) {
+    await supabase.from('wards').update({
+      state_code: row.state_code,
+      state_name: row.state_name,
+      city: row.city,
+      name: row.ward_name || existing.name,
+      ward_number: row.ward_number || existing.ward_number,
+      source_url: sourceUrl || row.source_url || existing.source_url || null,
+      updated_at: new Date(),
+    }).eq('id', existing.id);
+    return { ...existing, state_code: row.state_code, state_name: row.state_name, city: row.city };
+  }
+
+  const { data, error } = await supabase.from('wards').insert({
+    id: uuidv4(),
+    zone_id: zone.id,
+    state_code: row.state_code,
+    state_name: row.state_name,
+    city: row.city,
+    name: row.ward_name || row.ward_number,
+    ward_number: row.ward_number || null,
+    source_url: sourceUrl || row.source_url || null,
+  }).select('id, name, ward_number, city, state_code, state_name, zone_id').single();
+  if (error) throw error;
+  return data;
+}
+
+async function importRepresentatives(rows, { actor, format, sourceUrl }) {
+  const errors = [];
+  let imported = 0;
+  const mlaCache = new Map();
+
+  for (const [index, rawRow] of rows.entries()) {
+    try {
+      const row = normalizeRepRow(rawRow);
+      if (!row.city || (!row.ward_number && !row.ward_name)) {
+        throw new Error('city and ward_number/ward_name required');
+      }
+      if (!row.corporator_name && !row.mla_name) {
+        throw new Error('corporator_name or mla_name required');
+      }
+
+      const zone = await findOrCreateZone(row, sourceUrl);
+      const ward = await findOrCreateWard(row, zone, sourceUrl);
+
+      if (row.corporator_name) {
+        await supabase.from('corporators')
+          .update({ is_active: false, updated_at: new Date() })
+          .eq('ward_id', ward.id)
+          .eq('is_active', true);
+
+        const { error } = await supabase.from('corporators').insert({
+          id: uuidv4(),
+          ward_id: ward.id,
+          name: row.corporator_name,
+          party: row.corporator_party || null,
+          phone: row.corporator_phone || null,
+          email: row.corporator_email || null,
+          term_start: row.term_start,
+          term_end: row.term_end || null,
+          is_active: true,
+          injected_by: actor.id,
+          source_url: sourceUrl || row.source_url || null,
+          data_source: sourceUrl ? 'URL_IMPORT' : 'ADMIN_UPLOAD',
+        });
+        if (error) throw error;
+      }
+
+      if (row.mla_name) {
+        const cacheKey = `${zone.id}:${row.mla_name}:${row.mla_constituency}`;
+        let mlaId = mlaCache.get(cacheKey);
+        if (!mlaId) {
+          await supabase.from('mlas')
+            .update({ is_active: false, updated_at: new Date() })
+            .eq('zone_id', zone.id)
+            .eq('is_active', true);
+
+          const { data: mla, error } = await supabase.from('mlas').insert({
+            id: uuidv4(),
+            zone_id: zone.id,
+            state_code: row.state_code,
+            state_name: row.state_name,
+            city: row.city,
+            name: row.mla_name,
+            party: row.mla_party || null,
+            constituency: row.mla_constituency,
+            phone: row.mla_phone || null,
+            email: row.mla_email || null,
+            term_start: row.term_start,
+            term_end: row.term_end || null,
+            is_active: true,
+            injected_by: actor.id,
+            source_url: sourceUrl || row.source_url || null,
+            data_source: sourceUrl ? 'URL_IMPORT' : 'ADMIN_UPLOAD',
+          }).select('id').single();
+          if (error) throw error;
+          mlaId = mla.id;
+          mlaCache.set(cacheKey, mlaId);
+        }
+        await supabase.from('zones').update({ mla_id: mlaId, updated_at: new Date() }).eq('id', zone.id);
+      }
+
+      imported += 1;
+    } catch (err) {
+      errors.push({ row: index + 2, error: err.message });
+    }
+  }
+
+  const { data: batch } = await supabase.from('rep_import_batches').insert({
+    actor_id: actor.id,
+    actor_role: actor.role,
+    source_url: sourceUrl || null,
+    format,
+    rows_received: rows.length,
+    rows_imported: imported,
+    rows_failed: errors.length,
+    errors,
+  }).select().single();
+
+  return { batch, rows_received: rows.length, rows_imported: imported, rows_failed: errors.length, errors };
+}
+
 // All admin routes require authentication
 router.use(authenticate);
 
@@ -54,6 +289,64 @@ router.put('/reps/corporators/:id', isAdmin, async (req, res) => {
     .select().single();
   if (error) return res.status(500).json({ error: error.message });
   res.json({ corporator: data });
+});
+
+// POST bulk import representatives from CSV/JSON pasted or uploaded by admin
+router.post('/reps/import', isAdmin, async (req, res) => {
+  try {
+    const format = req.body.format || (Array.isArray(req.body.rows) ? 'json' : 'csv');
+    const rows = normalizeImportRows(req.body);
+    if (!rows.length) return res.status(400).json({ error: 'No import rows found' });
+
+    const result = await importRepresentatives(rows, {
+      actor: req.user,
+      format,
+      sourceUrl: req.body.source_url || null,
+    });
+
+    await supabase.from('audit_log').insert({
+      actor_id: req.user.id,
+      actor_role: req.user.role,
+      action: 'REPRESENTATIVES_IMPORTED',
+      target_type: 'rep_import_batch',
+      target_id: result.batch?.id,
+      metadata: result,
+    });
+
+    res.status(result.rows_failed ? 207 : 201).json({ import: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST import representatives from a direct CSV/JSON URL controlled by admin
+router.post('/reps/import-url', isAdmin, async (req, res) => {
+  try {
+    const { url, format = 'csv' } = req.body;
+    if (!url || !/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'Valid http(s) url required' });
+
+    const response = await fetch(url);
+    if (!response.ok) return res.status(400).json({ error: `Source returned ${response.status}` });
+    const text = await response.text();
+    const rows = format === 'json'
+      ? normalizeImportRows({ format: 'json', data: text })
+      : parseCsv(text);
+
+    if (!rows.length) return res.status(400).json({ error: 'No rows found at source URL' });
+    const result = await importRepresentatives(rows, { actor: req.user, format, sourceUrl: url });
+    res.status(result.rows_failed ? 207 : 201).json({ import: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/reps/imports', isAdmin, async (req, res) => {
+  const { data, error } = await supabase.from('rep_import_batches')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(20);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ imports: data });
 });
 
 // POST inject MLA
