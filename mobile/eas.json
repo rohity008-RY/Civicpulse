@@ -1,0 +1,25 @@
+{
+  "cli": {
+    "version": ">= 7.0.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://civicpulse-api-yf40.onrender.com"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://civicpulse-api-yf40.onrender.com"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    }
+  }
+}
