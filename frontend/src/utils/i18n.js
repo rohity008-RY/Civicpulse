@@ -49,6 +49,33 @@ const en = {
   accountCreated: 'Account created',
   signedIn: 'Signed in',
   authFailed: 'Authentication failed',
+  continueWithGoogle: 'Continue with Google',
+  googleNeedsSetup: 'Google sign-in needs setup',
+  googleSigningIn: 'Signing in with Google…',
+  googleUnavailable: 'Google sign-in is unavailable right now',
+  googleSignInFailed: 'Google sign-in failed',
+  forgotPassword: 'Forgot password',
+  forgotPasswordQuestion: 'Forgot password?',
+  forgotPasswordCopy: 'Enter your account email and CivicPulse will send a secure reset link.',
+  sendResetLink: 'Send reset link',
+  resetLinkSent: 'Reset request received',
+  resetRequestFailed: 'Reset request failed',
+  resetRequestReceived: 'Reset request received',
+  resetEmailConfigured: 'Check your email for the reset link.',
+  resetEmailNotConfigured: 'Email delivery is not configured yet. Use the demo reset link below.',
+  resetIfAccountExists: 'If that account exists, a reset link will be available after email delivery is configured.',
+  openResetLink: 'Open reset link',
+  backToSignIn: 'Back to sign in',
+  or: 'or',
+  passwordReset: 'Password reset',
+  chooseNewPassword: 'Choose a new password',
+  resetPasswordCopy: 'Use the secure link from your email to set a new password.',
+  resetTokenMissing: 'Reset token is missing. Please request a new reset link.',
+  confirmPassword: 'Confirm password',
+  resetPasswordButton: 'Reset password',
+  passwordMismatch: 'Passwords do not match',
+  passwordResetDone: 'Password reset complete',
+  passwordResetFailed: 'Password reset failed',
   newReport: 'New civic report',
   raiseWeb: 'Raise an issue from the web',
   signInBeforeSubmit: 'Sign in or create an account before submitting.',
@@ -237,6 +264,32 @@ Object.assign(dictionaries.pa, {
   authEyebrow: 'ਨਾਗਰਿਕ ਪਹੁੰਚ', authTitle: 'ਸਮੱਸਿਆਵਾਂ ਦਰਜ ਅਤੇ ਟ੍ਰੈਕ ਕਰਨ ਲਈ ਖਾਤਾ ਬਣਾਓ', authCopy: 'ਤੁਹਾਡੀਆਂ ਰਿਪੋਰਟਾਂ ਅਸਲ ਬੈਕਐਂਡ ਨਾਲ ਜੁੜਦੀਆਂ ਹਨ ਅਤੇ ਜਮ੍ਹਾਂ ਹੋਣ ਤੋਂ ਬਾਅਦ ਫੀਡ ਵਿੱਚ ਦਿਖਦੀਆਂ ਹਨ.', accountCreated: 'ਖਾਤਾ ਬਣ ਗਿਆ', signedIn: 'ਸਾਈਨ ਇਨ ਹੋ ਗਿਆ', authFailed: 'ਪ੍ਰਮਾਣੀਕਰਨ ਅਸਫਲ',
   emptyTitle: 'ਇਸ ਦ੍ਰਿਸ਼ ਵਿੱਚ ਕੋਈ ਸਮੱਸਿਆ ਨਹੀਂ', emptyCopy: 'ਆਪਣੇ ਖੇਤਰ ਦੀ ਪਹਿਲੀ ਰਿਪੋਰਟ ਦਰਜ ਕਰੋ ਜਾਂ ਫਿਲਟਰ ਸਾਫ ਕਰੋ.', backToFeed: 'ਫੀਡ ਵੱਲ ਵਾਪਸ', mappedReps: 'ਮੈਪ ਕੀਤੇ ਪ੍ਰਤੀਨਿਧੀ', notMapped: 'ਹਾਲੇ ਮੈਪ ਨਹੀਂ', adminCanImport: 'ਐਡਮਿਨ ਪ੍ਰਤੀਨਿਧੀ ਡੇਟਾ ਆਯਾਤ ਜਾਂ ਅਪਡੇਟ ਕਰ ਸਕਦਾ ਹੈ.', timeline: 'ਟਾਈਮਲਾਈਨ',
   citizenProfile: 'ਨਾਗਰਿਕ ਪ੍ਰੋਫਾਈਲ', profileTitle: 'ਪ੍ਰੋਫਾਈਲ ਅਤੇ ਹੋਮ ਵਾਰਡ', accountDetails: 'ਖਾਤਾ ਵੇਰਵੇ', saveProfile: 'ਪ੍ਰੋਫਾਈਲ ਸੇਵ ਕਰੋ', profileSaved: 'ਪ੍ਰੋਫਾਈਲ ਸੇਵ ਹੋਈ', manualImport: 'ਮੈਨੁਅਲ ਆਯਾਤ', downloadSample: 'ਨਮੂਨਾ CSV ਡਾਊਨਲੋਡ', loadSample: 'ਨਮੂਨਾ ਕਤਾਰਾਂ ਲੋਡ', importData: 'ਡੇਟਾ ਆਯਾਤ ਅਤੇ ਮੈਪ ਕਰੋ',
+});
+
+Object.assign(dictionaries.hi, {
+  continueWithGoogle: 'Google से जारी रखें', googleNeedsSetup: 'Google साइन-इन सेटअप चाहिए', googleSigningIn: 'Google से साइन इन हो रहा है…', googleUnavailable: 'Google साइन-इन अभी उपलब्ध नहीं', googleSignInFailed: 'Google साइन-इन विफल',
+  forgotPassword: 'पासवर्ड भूल गए', forgotPasswordQuestion: 'पासवर्ड भूल गए?', forgotPasswordCopy: 'अपना ईमेल डालें, CivicPulse सुरक्षित रीसेट लिंक भेजेगा.', sendResetLink: 'रीसेट लिंक भेजें', resetLinkSent: 'रीसेट अनुरोध मिला', resetRequestFailed: 'रीसेट अनुरोध विफल', resetRequestReceived: 'रीसेट अनुरोध मिला',
+  resetEmailConfigured: 'रीसेट लिंक के लिए अपना ईमेल देखें.', resetEmailNotConfigured: 'ईमेल डिलीवरी अभी सेट नहीं है. नीचे demo reset link उपयोग करें.', resetIfAccountExists: 'अगर यह खाता मौजूद है, ईमेल डिलीवरी सेट होने के बाद रीसेट लिंक काम करेगा.', openResetLink: 'रीसेट लिंक खोलें', backToSignIn: 'साइन इन पर वापस', or: 'या',
+  passwordReset: 'पासवर्ड रीसेट', chooseNewPassword: 'नया पासवर्ड चुनें', resetPasswordCopy: 'नया पासवर्ड सेट करने के लिए ईमेल वाला सुरक्षित लिंक उपयोग करें.', resetTokenMissing: 'रीसेट टोकन गायब है. नया लिंक मांगें.', confirmPassword: 'पासवर्ड पुष्टि करें', resetPasswordButton: 'पासवर्ड रीसेट करें', passwordMismatch: 'पासवर्ड मेल नहीं खाते', passwordResetDone: 'पासवर्ड रीसेट पूरा', passwordResetFailed: 'पासवर्ड रीसेट विफल',
+});
+
+Object.assign(dictionaries.mr, {
+  continueWithGoogle: 'Google ने पुढे जा', googleNeedsSetup: 'Google साइन-इन सेटअप हवा', googleSigningIn: 'Google ने साइन इन होत आहे…', googleUnavailable: 'Google साइन-इन सध्या उपलब्ध नाही', googleSignInFailed: 'Google साइन-इन अयशस्वी',
+  forgotPassword: 'पासवर्ड विसरलात', forgotPasswordQuestion: 'पासवर्ड विसरलात?', forgotPasswordCopy: 'तुमचा ईमेल टाका, CivicPulse सुरक्षित reset link पाठवेल.', sendResetLink: 'रीसेट लिंक पाठवा', resetLinkSent: 'रीसेट विनंती मिळाली', resetRequestFailed: 'रीसेट विनंती अयशस्वी', resetRequestReceived: 'रीसेट विनंती मिळाली',
+  resetEmailConfigured: 'रीसेट लिंकसाठी ईमेल तपासा.', resetEmailNotConfigured: 'ईमेल डिलिव्हरी अजून सेट नाही. खालील demo reset link वापरा.', resetIfAccountExists: 'हे खाते असल्यास, ईमेल डिलिव्हरी सेट झाल्यावर रीसेट लिंक काम करेल.', openResetLink: 'रीसेट लिंक उघडा', backToSignIn: 'साइन इनकडे परत', or: 'किंवा',
+  passwordReset: 'पासवर्ड रीसेट', chooseNewPassword: 'नवा पासवर्ड निवडा', resetPasswordCopy: 'नवा पासवर्ड सेट करण्यासाठी ईमेलमधील सुरक्षित लिंक वापरा.', resetTokenMissing: 'रीसेट टोकन नाही. नवीन लिंक मागवा.', confirmPassword: 'पासवर्ड पुष्टी', resetPasswordButton: 'पासवर्ड रीसेट करा', passwordMismatch: 'पासवर्ड जुळत नाहीत', passwordResetDone: 'पासवर्ड रीसेट झाला', passwordResetFailed: 'पासवर्ड रीसेट अयशस्वी',
+});
+
+Object.assign(dictionaries.gu, {
+  continueWithGoogle: 'Google સાથે આગળ વધો', forgotPassword: 'પાસવર્ડ ભૂલ્યા', forgotPasswordQuestion: 'પાસવર્ડ ભૂલ્યા?', sendResetLink: 'રીસેટ લિંક મોકલો', resetLinkSent: 'રીસેટ વિનંતી મળી', openResetLink: 'રીસેટ લિંક ખોલો', backToSignIn: 'સાઇન ઇન પર પાછા', or: 'અથવા', passwordReset: 'પાસવર્ડ રીસેટ', chooseNewPassword: 'નવો પાસવર્ડ પસંદ કરો', confirmPassword: 'પાસવર્ડ પુષ્ટિ', resetPasswordButton: 'પાસવર્ડ રીસેટ કરો', passwordMismatch: 'પાસવર્ડ મેળ ખાતા નથી', passwordResetDone: 'પાસવર્ડ રીસેટ પૂર્ણ',
+});
+
+Object.assign(dictionaries.bn, {
+  continueWithGoogle: 'Google দিয়ে চালিয়ে যান', forgotPassword: 'পাসওয়ার্ড ভুলে গেছেন', forgotPasswordQuestion: 'পাসওয়ার্ড ভুলে গেছেন?', sendResetLink: 'রিসেট লিঙ্ক পাঠান', resetLinkSent: 'রিসেট অনুরোধ নেওয়া হয়েছে', openResetLink: 'রিসেট লিঙ্ক খুলুন', backToSignIn: 'সাইন ইনে ফিরুন', or: 'অথবা', passwordReset: 'পাসওয়ার্ড রিসেট', chooseNewPassword: 'নতুন পাসওয়ার্ড দিন', confirmPassword: 'পাসওয়ার্ড নিশ্চিত করুন', resetPasswordButton: 'পাসওয়ার্ড রিসেট করুন', passwordMismatch: 'পাসওয়ার্ড মিলছে না', passwordResetDone: 'পাসওয়ার্ড রিসেট সম্পন্ন',
+});
+
+Object.assign(dictionaries.ta, {
+  continueWithGoogle: 'Google மூலம் தொடர்க', forgotPassword: 'கடவுச்சொல் மறந்துவிட்டதா', forgotPasswordQuestion: 'கடவுச்சொல் மறந்துவிட்டதா?', sendResetLink: 'ரீசெட் இணைப்பு அனுப்பு', resetLinkSent: 'ரீசெட் கோரிக்கை பெறப்பட்டது', openResetLink: 'ரீசெட் இணைப்பு திற', backToSignIn: 'உள்நுழைவிற்கு திரும்பு', or: 'அல்லது', passwordReset: 'கடவுச்சொல் ரீசெட்', chooseNewPassword: 'புதிய கடவுச்சொல் தேர்வு', confirmPassword: 'கடவுச்சொல் உறுதி', resetPasswordButton: 'கடவுச்சொல் ரீசெட் செய்', passwordMismatch: 'கடவுச்சொற்கள் பொருந்தவில்லை', passwordResetDone: 'கடவுச்சொல் ரீசெட் முடிந்தது',
 });
 
 export function translate(language, key, values = {}) {

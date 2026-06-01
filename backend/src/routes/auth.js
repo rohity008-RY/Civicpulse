@@ -7,6 +7,14 @@ const supabase = require('../config/supabase');
 const { authenticate } = require('../middleware/auth');
 const multer = require('multer');
 const { normalizeLanguage } = require('../services/languageService');
+const { verifyGoogleIdToken } = require('../services/googleAuthService');
+const {
+  createPasswordReset,
+  consumePasswordReset,
+  markPasswordResetUsed,
+  sendPasswordResetEmail,
+  shouldReturnResetUrl,
+} = require('../services/passwordResetService');
 
 const avatarUpload = multer({
   storage: multer.memoryStorage(),
@@ -19,14 +27,19 @@ const signToken = (user) => jwt.sign(
   { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
 );
 
+const normalizeEmail = (email) => (email ? String(email).trim().toLowerCase() : null);
+
 // ─── Register with email/password ────────────────────────────
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, phone, password, preferred_language } = req.body;
+    const { name, phone, password, preferred_language } = req.body;
+    const email = normalizeEmail(req.body.email);
     if (!name || (!email && !phone))
       return res.status(400).json({ error: 'Name and email or phone required' });
+    if (!password || String(password).length < 8)
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
 
-    const hash = await bcrypt.hash(password || uuidv4(), 10);
+    const hash = await bcrypt.hash(password, 10);
 
     const { data: existing } = await supabase.from('users')
       .select('id').or(`email.eq.${email},phone.eq.${phone}`).maybeSingle();
@@ -36,6 +49,7 @@ router.post('/register', async (req, res) => {
       id: uuidv4(), name, email, phone,
       password_hash: hash,
       role: 'CITIZEN',
+      email_verified: false,
       preferred_language: normalizeLanguage(preferred_language),
       is_active: true
     }).select().single();
@@ -51,7 +65,8 @@ router.post('/register', async (req, res) => {
 // ─── Login with email/password ───────────────────────────────
 router.post('/login', async (req, res) => {
   try {
-    const { email, phone, password, preferred_language } = req.body;
+    const { phone, password, preferred_language } = req.body;
+    const email = normalizeEmail(req.body.email);
     if (!email && !phone)
       return res.status(400).json({ error: 'Email or phone required' });
 
@@ -82,28 +97,64 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// ─── Social login (Google / Facebook) ────────────────────────
+// ─── Social login (Google) ───────────────────────────────────
 router.post('/social', async (req, res) => {
   try {
-    const { provider, uid, name, email, avatar_url, preferred_language } = req.body;
-    if (!provider || !uid || !name)
-      return res.status(400).json({ error: 'provider, uid, name required' });
+    const { provider, id_token, preferred_language } = req.body;
+    if (provider !== 'google') {
+      return res.status(400).json({ error: 'Only Google sign-in is supported' });
+    }
+    if (!id_token) {
+      return res.status(400).json({ error: 'Google credential is required' });
+    }
 
+    const googleUser = await verifyGoogleIdToken(id_token);
     let { data: user } = await supabase.from('users')
-      .select('*').eq('social_uid', uid).maybeSingle();
+      .select('*').eq('social_provider', 'google').eq('social_uid', googleUser.uid).maybeSingle();
 
     if (!user) {
-      const { data: newUser, error } = await supabase.from('users').insert({
-        id: uuidv4(), name, email,
-        social_provider: provider, social_uid: uid,
-        avatar_url, role: 'CITIZEN', preferred_language: normalizeLanguage(preferred_language), is_active: true
-      }).select().single();
-      if (error) throw error;
-      user = newUser;
+      const { data: emailUser, error: emailLookupError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', googleUser.email)
+        .maybeSingle();
+      if (emailLookupError) throw emailLookupError;
+
+      if (emailUser) {
+        const { data: linkedUser, error: linkError } = await supabase.from('users')
+          .update({
+            social_provider: 'google',
+            social_uid: googleUser.uid,
+            email_verified: true,
+            avatar_url: emailUser.avatar_url || googleUser.avatar_url,
+          })
+          .eq('id', emailUser.id)
+          .select('*')
+          .single();
+        if (linkError) throw linkError;
+        user = linkedUser;
+      } else {
+        const { data: newUser, error } = await supabase.from('users').insert({
+          id: uuidv4(),
+          name: googleUser.name,
+          email: googleUser.email,
+          social_provider: 'google',
+          social_uid: googleUser.uid,
+          avatar_url: googleUser.avatar_url,
+          email_verified: true,
+          role: 'CITIZEN',
+          preferred_language: normalizeLanguage(preferred_language),
+          is_active: true,
+        }).select().single();
+        if (error) throw error;
+        user = newUser;
+      }
     }
 
     const updates = { last_active_at: new Date() };
     if (preferred_language) updates.preferred_language = normalizeLanguage(preferred_language);
+    if (!user.avatar_url && googleUser.avatar_url) updates.avatar_url = googleUser.avatar_url;
+    if (!user.email_verified) updates.email_verified = true;
     const { data: updatedUser, error: updateError } = await supabase
       .from('users')
       .update(updates)
@@ -113,7 +164,73 @@ router.post('/social', async (req, res) => {
     if (updateError) throw updateError;
     res.json({ token: signToken(updatedUser), user: sanitizeUser(updatedUser) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// ─── Request password reset ──────────────────────────────────
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const email = normalizeEmail(req.body.email);
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    const genericResponse = {
+      ok: true,
+      message: 'If an account exists, a reset link has been sent.',
+      email_configured: Boolean(process.env.RESEND_API_KEY && process.env.PASSWORD_RESET_FROM_EMAIL),
+    };
+
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .maybeSingle();
+    if (error) throw error;
+    if (!user || !user.is_active) return res.json(genericResponse);
+
+    const reset = await createPasswordReset(user.id);
+    const emailResult = await sendPasswordResetEmail({
+      to: user.email,
+      name: user.name,
+      resetUrl: reset.reset_url,
+    });
+
+    const response = {
+      ...genericResponse,
+      email_configured: emailResult.sent,
+      expires_at: reset.expires_at,
+    };
+    if (shouldReturnResetUrl()) response.reset_url = reset.reset_url;
+    res.json(response);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'Password reset request failed' });
+  }
+});
+
+// ─── Complete password reset ─────────────────────────────────
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (!token) return res.status(400).json({ error: 'Reset token is required' });
+    if (!password || String(password).length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+
+    const resetRow = await consumePasswordReset(token);
+    const hash = await bcrypt.hash(password, 10);
+
+    const { data: user, error } = await supabase
+      .from('users')
+      .update({ password_hash: hash, last_active_at: new Date() })
+      .eq('id', resetRow.user_id)
+      .select('*')
+      .single();
+    if (error) throw error;
+
+    await markPasswordResetUsed(resetRow.id);
+    res.json({ ok: true, token: signToken(user), user: sanitizeUser(user) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'Password reset failed' });
   }
 });
 
@@ -212,6 +329,7 @@ router.put('/fcm-token', authenticate, async (req, res) => {
 const sanitizeUser = (u) => ({
   id: u.id, name: u.name, email: u.email, phone: u.phone,
   role: u.role, avatar_url: u.avatar_url, home_ward_id: u.home_ward_id,
+  email_verified: Boolean(u.email_verified),
   preferred_language: normalizeLanguage(u.preferred_language),
   home_ward: u.wards || null
 });

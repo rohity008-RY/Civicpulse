@@ -8,14 +8,35 @@ const en = {
   profile: 'Profile',
   language: 'Language',
   continueEmail: 'Continue with Email',
+  continueWithGoogle: 'Continue with Google',
   quickDemo: 'Quick Demo — Explore App',
   createAccount: 'Create Account',
   signIn: 'Sign In',
   signOut: 'Sign out',
+  back: 'Back',
   fullName: 'Full name',
   email: 'Email address',
   password: 'Password',
   pleaseWait: 'Please wait…',
+  alreadyHaveAccount: 'Already have an account? Sign in',
+  newHere: 'New here? Create account',
+  googleNeedsSetup: 'Google sign-in needs setup',
+  googleNeedsSetupCopy: 'Add Google OAuth client IDs before using Google sign-in.',
+  googleUnavailable: 'Google sign-in is unavailable right now',
+  googleTokenMissing: 'Google did not return a secure sign-in token.',
+  googleSignInFailed: 'Google sign-in failed',
+  forgotPassword: 'Forgot password',
+  forgotPasswordQuestion: 'Forgot password?',
+  forgotPasswordCopy: 'Enter your email and CivicPulse will send a secure reset link.',
+  sendResetLink: 'Send reset link',
+  resetLinkSent: 'Reset request received',
+  resetEmailConfigured: 'Check your email for the reset link.',
+  resetEmailNotConfigured: 'Email delivery is not configured yet. Use the demo reset link.',
+  resetIfAccountExists: 'If that account exists, a reset link will work after email delivery is configured.',
+  openResetLink: 'Open reset link',
+  resetRequestFailed: 'Reset request failed',
+  emailRequired: 'Email is required',
+  cancel: 'Cancel',
   welcomeTagline: 'Raise issues. Track resolutions.\nHold your representative accountable.',
   issuesRaised: 'Issues Raised',
   resolved: 'Resolved',
@@ -97,6 +118,18 @@ const dictionaries = {
   ml: { home: 'ഹോം', escalated: 'എസ്കലേറ്റഡ്', create: 'റിപ്പോർട്ട്', trending: 'ട്രെൻഡിംഗ്', profile: 'പ്രൊഫൈൽ', language: 'ഭാഷ', signIn: 'സൈൻ ഇൻ', signOut: 'സൈൻ ഔട്ട്', createAccount: 'അക്കൗണ്ട് സൃഷ്ടിക്കുക', continueEmail: 'ഇമെയിലിൽ തുടരുക', yourWardFeed: 'നിങ്ങളുടെ വാർഡ് ഫീഡ്', raiseIssue: 'പ്രശ്നം റിപ്പോർട്ട് ചെയ്യുക', issueDetail: 'പ്രശ്ന വിശദാംശം', category: 'വിഭാഗം *', issueTitle: 'തലക്കെട്ട് *', description: 'വിവരണം', location: 'സ്ഥലം *', wardMapping: 'വാർഡ് മാപ്പിംഗ്', submitIssue: 'സമർപ്പിക്കുക', saveProfile: 'സേവ് ചെയ്യുക', homeWard: 'ഹോം വാർഡ്', name: 'പേര്', phone: 'ഫോൺ', share: 'ഷെയർ', pothole: 'കുഴി', garbage: 'മാലിന്യം', water: 'വെള്ളം', streetlight: 'തെരുവ് ലൈറ്റ്', safety: 'സുരക്ഷ', tree: 'മരം', other: 'മറ്റ്' },
   pa: { home: 'ਹੋਮ', escalated: 'ਐਸਕਲੇਟਡ', create: 'ਦਰਜ ਕਰੋ', trending: 'ਟ੍ਰੈਂਡਿੰਗ', profile: 'ਪ੍ਰੋਫਾਈਲ', language: 'ਭਾਸ਼ਾ', signIn: 'ਸਾਈਨ ਇਨ', signOut: 'ਸਾਈਨ ਆਉਟ', createAccount: 'ਖਾਤਾ ਬਣਾਓ', continueEmail: 'ਈਮੇਲ ਨਾਲ ਜਾਰੀ ਰੱਖੋ', yourWardFeed: 'ਤੁਹਾਡਾ ਵਾਰਡ ਫੀਡ', raiseIssue: 'ਸਮੱਸਿਆ ਦਰਜ ਕਰੋ', issueDetail: 'ਸਮੱਸਿਆ ਵੇਰਵਾ', category: 'ਸ਼੍ਰੇਣੀ *', issueTitle: 'ਸਿਰਲੇਖ *', description: 'ਵੇਰਵਾ', location: 'ਸਥਾਨ *', wardMapping: 'ਵਾਰਡ ਮੈਪਿੰਗ', submitIssue: 'ਜਮ੍ਹਾਂ ਕਰੋ', saveProfile: 'ਸੇਵ ਕਰੋ', homeWard: 'ਹੋਮ ਵਾਰਡ', name: 'ਨਾਮ', phone: 'ਫੋਨ', share: 'ਸ਼ੇਅਰ', pothole: 'ਖੱਡਾ', garbage: 'ਕੂੜਾ', water: 'ਪਾਣੀ', streetlight: 'ਸਟ੍ਰੀਟਲਾਈਟ', safety: 'ਸੁਰੱਖਿਆ', tree: 'ਰੁੱਖ', other: 'ਹੋਰ' },
 };
+
+Object.assign(dictionaries.hi, {
+  continueWithGoogle: 'Google से जारी रखें', back: 'वापस', alreadyHaveAccount: 'पहले से खाता है? साइन इन', newHere: 'नए हैं? खाता बनाएं',
+  googleNeedsSetup: 'Google साइन-इन सेटअप चाहिए', googleNeedsSetupCopy: 'Google साइन-इन के लिए OAuth client IDs जोड़ें.', googleUnavailable: 'Google साइन-इन अभी उपलब्ध नहीं', googleTokenMissing: 'Google ने सुरक्षित टोकन नहीं भेजा.', googleSignInFailed: 'Google साइन-इन विफल',
+  forgotPassword: 'पासवर्ड भूल गए', forgotPasswordQuestion: 'पासवर्ड भूल गए?', forgotPasswordCopy: 'ईमेल डालें, CivicPulse सुरक्षित रीसेट लिंक भेजेगा.', sendResetLink: 'रीसेट लिंक भेजें', resetLinkSent: 'रीसेट अनुरोध मिला', resetEmailConfigured: 'रीसेट लिंक के लिए ईमेल देखें.', resetEmailNotConfigured: 'ईमेल डिलीवरी सेट नहीं है. demo reset link उपयोग करें.', resetIfAccountExists: 'अगर यह खाता मौजूद है, ईमेल डिलीवरी सेट होने के बाद रीसेट लिंक काम करेगा.', openResetLink: 'रीसेट लिंक खोलें', resetRequestFailed: 'रीसेट अनुरोध विफल', emailRequired: 'ईमेल जरूरी है', cancel: 'रद्द करें',
+});
+
+Object.assign(dictionaries.mr, {
+  continueWithGoogle: 'Google ने पुढे जा', back: 'मागे', alreadyHaveAccount: 'खाते आहे? साइन इन', newHere: 'नवीन आहात? खाते तयार करा',
+  googleNeedsSetup: 'Google साइन-इन सेटअप हवा', googleNeedsSetupCopy: 'Google साइन-इनसाठी OAuth client IDs जोडा.', googleUnavailable: 'Google साइन-इन उपलब्ध नाही', googleTokenMissing: 'Google ने सुरक्षित टोकन दिले नाही.', googleSignInFailed: 'Google साइन-इन अयशस्वी',
+  forgotPassword: 'पासवर्ड विसरलात', forgotPasswordQuestion: 'पासवर्ड विसरलात?', forgotPasswordCopy: 'ईमेल टाका, CivicPulse सुरक्षित reset link पाठवेल.', sendResetLink: 'रीसेट लिंक पाठवा', resetLinkSent: 'रीसेट विनंती मिळाली', resetEmailConfigured: 'रीसेट लिंकसाठी ईमेल तपासा.', resetEmailNotConfigured: 'ईमेल डिलिव्हरी सेट नाही. demo reset link वापरा.', resetIfAccountExists: 'हे खाते असल्यास, ईमेल डिलिव्हरी सेट झाल्यावर रीसेट लिंक काम करेल.', openResetLink: 'रीसेट लिंक उघडा', resetRequestFailed: 'रीसेट विनंती अयशस्वी', emailRequired: 'ईमेल आवश्यक आहे', cancel: 'रद्द',
+});
 
 export function t(language, key) {
   return dictionaries[language]?.[key] || en[key] || key;

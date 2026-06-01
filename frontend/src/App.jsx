@@ -1,5 +1,5 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { motion, useReducedMotion } from 'framer-motion';
@@ -18,6 +18,7 @@ import {
   FileText,
   Flame,
   Globe2,
+  KeyRound,
   Lightbulb,
   ListFilter,
   Loader2,
@@ -64,6 +65,33 @@ const STATUS_LABELS = {
   RESOLVED: 'Resolved',
   CLOSED: 'Closed',
 };
+
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+let googleIdentityPromise;
+
+function loadGoogleIdentityScript() {
+  if (window.google?.accounts?.id) return Promise.resolve(window.google);
+  if (googleIdentityPromise) return googleIdentityPromise;
+
+  googleIdentityPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve(window.google), { once: true });
+      existing.addEventListener('error', reject, { once: true });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve(window.google);
+    script.onerror = () => reject(new Error('Google sign-in script failed to load'));
+    document.head.appendChild(script);
+  });
+
+  return googleIdentityPromise;
+}
 
 const DEFAULT_LOCATION = {
   lat: 19.076,
@@ -568,6 +596,15 @@ function AuthPanel({ compact = false, redirectTo = '/raise' }) {
   const setLanguage = useLanguageStore((state) => state.setLanguage);
   const [mode, setMode] = useState('register');
   const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [resetInfo, setResetInfo] = useState(null);
+  const googleButtonRef = useRef(null);
+
+  const finishAuth = (data, message) => {
+    login(data.user, data.token);
+    setLanguage(data.user?.preferred_language || language);
+    toast.success(message);
+    navigate(redirectTo);
+  };
 
   const auth = useMutation({
     mutationFn: async () => {
@@ -579,26 +616,102 @@ function AuthPanel({ compact = false, redirectTo = '/raise' }) {
       return data;
     },
     onSuccess: (data) => {
-      login(data.user, data.token);
-      setLanguage(data.user?.preferred_language || language);
-      toast.success(mode === 'register' ? t('accountCreated') : t('signedIn'));
-      navigate(redirectTo);
+      finishAuth(data, mode === 'register' ? t('accountCreated') : t('signedIn'));
     },
     onError: (error) => toast.error(error.response?.data?.error || t('authFailed')),
   });
 
+  const googleAuth = useMutation({
+    mutationFn: async (credential) => {
+      const { data } = await api.post('/api/auth/social', {
+        provider: 'google',
+        id_token: credential,
+        preferred_language: language,
+      });
+      return data;
+    },
+    onSuccess: (data) => finishAuth(data, t('signedIn')),
+    onError: (error) => toast.error(error.response?.data?.error || t('googleSignInFailed')),
+  });
+
+  const forgotPassword = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post('/api/auth/forgot-password', { email: form.email });
+      return data;
+    },
+    onSuccess: (data) => {
+      setResetInfo(data);
+      toast.success(t('resetLinkSent'));
+    },
+    onError: (error) => toast.error(error.response?.data?.error || t('resetRequestFailed')),
+  });
+
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID || !googleButtonRef.current || mode === 'forgot') return undefined;
+
+    let cancelled = false;
+    const target = googleButtonRef.current;
+    target.innerHTML = '';
+
+    loadGoogleIdentityScript()
+      .then(() => {
+        if (cancelled || !window.google?.accounts?.id) return;
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: (response) => {
+            if (response?.credential) googleAuth.mutate(response.credential);
+          },
+        });
+        window.google.accounts.id.renderButton(target, {
+          theme: 'outline',
+          size: 'large',
+          type: 'standard',
+          text: mode === 'register' ? 'signup_with' : 'signin_with',
+          shape: 'rectangular',
+          width: Math.min(360, target.offsetWidth || 320),
+        });
+      })
+      .catch(() => {
+        if (!cancelled) toast.error(t('googleUnavailable'));
+      });
+
+    return () => {
+      cancelled = true;
+      target.innerHTML = '';
+    };
+  }, [mode, language]);
+
+  const submitAuth = (event) => {
+    event.preventDefault();
+    if (mode === 'forgot') {
+      forgotPassword.mutate();
+      return;
+    }
+    auth.mutate();
+  };
+
   return (
     <section className={`auth-panel ${compact ? 'compact' : ''}`}>
-      <div className="auth-tabs" role="tablist">
-        <button type="button" className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')}>
-          {t('register')}
-        </button>
-        <button type="button" className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>
-          {t('signIn')}
-        </button>
-      </div>
+      {mode !== 'forgot' ? (
+        <div className="auth-tabs" role="tablist">
+          <button type="button" className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')}>
+            {t('register')}
+          </button>
+          <button type="button" className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>
+            {t('signIn')}
+          </button>
+        </div>
+      ) : (
+        <div className="auth-mode-heading">
+          <KeyRound size={19} />
+          <div>
+            <h2>{t('forgotPassword')}</h2>
+            <p>{t('forgotPasswordCopy')}</p>
+          </div>
+        </div>
+      )}
 
-      <form onSubmit={(event) => { event.preventDefault(); auth.mutate(); }} className="auth-form">
+      <form onSubmit={submitAuth} className="auth-form">
         <LanguageSelect label />
         {mode === 'register' && (
           <label>
@@ -621,21 +734,69 @@ function AuthPanel({ compact = false, redirectTo = '/raise' }) {
             placeholder="you@example.com"
           />
         </label>
-        <label>
-          {t('password')}
-          <input
-            required
-            minLength={8}
-            type="password"
-            value={form.password}
-            onChange={(event) => setForm((state) => ({ ...state, password: event.target.value }))}
-            placeholder="Minimum 8 characters"
-          />
-        </label>
-        <button type="submit" className="button primary" disabled={auth.isPending}>
-          {auth.isPending ? <Loader2 size={17} className="spin" /> : <ShieldCheck size={17} />}
-          {mode === 'register' ? t('createAccount') : t('signIn')}
+        {mode !== 'forgot' && (
+          <label>
+            {t('password')}
+            <input
+              required
+              minLength={8}
+              type="password"
+              value={form.password}
+              onChange={(event) => setForm((state) => ({ ...state, password: event.target.value }))}
+              placeholder="Minimum 8 characters"
+            />
+          </label>
+        )}
+        {mode === 'login' && (
+          <button type="button" className="text-button auth-link" onClick={() => { setMode('forgot'); setResetInfo(null); }}>
+            {t('forgotPasswordQuestion')}
+          </button>
+        )}
+        <button
+          type="submit"
+          className="button primary"
+          disabled={auth.isPending || forgotPassword.isPending}
+        >
+          {auth.isPending || forgotPassword.isPending ? <Loader2 size={17} className="spin" /> : <ShieldCheck size={17} />}
+          {mode === 'forgot' ? t('sendResetLink') : mode === 'register' ? t('createAccount') : t('signIn')}
         </button>
+        {mode === 'forgot' && resetInfo && (
+          <div className="reset-result">
+            <strong>{t('resetRequestReceived')}</strong>
+            <p>
+              {resetInfo.reset_url
+                ? t('resetEmailNotConfigured')
+                : resetInfo.email_configured
+                  ? t('resetEmailConfigured')
+                  : t('resetIfAccountExists')}
+            </p>
+            {resetInfo.reset_url && (
+              <a className="button secondary" href={resetInfo.reset_url}>
+                {t('openResetLink')}
+              </a>
+            )}
+          </div>
+        )}
+        {mode === 'forgot' ? (
+          <button type="button" className="text-button auth-link" onClick={() => setMode('login')}>
+            {t('backToSignIn')}
+          </button>
+        ) : (
+          <>
+            <div className="auth-divider"><span>{t('or')}</span></div>
+            {GOOGLE_CLIENT_ID ? (
+              <div className="google-button-wrap" ref={googleButtonRef} aria-label={t('continueWithGoogle')} />
+            ) : (
+              <button type="button" className="button secondary google-fallback" disabled>
+                <Globe2 size={17} />
+                {t('googleNeedsSetup')}
+              </button>
+            )}
+            {googleAuth.isPending && (
+              <p className="inline-status"><Loader2 size={14} className="spin" /> {t('googleSigningIn')}</p>
+            )}
+          </>
+        )}
       </form>
     </section>
   );
@@ -657,6 +818,82 @@ function LoginPage() {
           </p>
         </div>
         <AuthPanel />
+      </section>
+    </AppShell>
+  );
+}
+
+function ResetPasswordPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { login } = useAuthStore();
+  const { t } = useT();
+  const token = searchParams.get('token') || '';
+  const [form, setForm] = useState({ password: '', confirm: '' });
+
+  const resetPassword = useMutation({
+    mutationFn: async () => {
+      if (form.password !== form.confirm) throw new Error(t('passwordMismatch'));
+      const { data } = await api.post('/api/auth/reset-password', {
+        token,
+        password: form.password,
+      });
+      return data;
+    },
+    onSuccess: (data) => {
+      if (data.user && data.token) login(data.user, data.token);
+      toast.success(t('passwordResetDone'));
+      navigate('/profile');
+    },
+    onError: (error) => toast.error(error.response?.data?.error || error.message || t('passwordResetFailed')),
+  });
+
+  return (
+    <AppShell>
+      <section className="auth-page reset-page">
+        <div>
+          <p className="eyebrow">{t('passwordReset')}</p>
+          <h1>{t('chooseNewPassword')}</h1>
+          <p className="lede">{t('resetPasswordCopy')}</p>
+        </div>
+        <section className="auth-panel">
+          {!token ? (
+            <div className="notice">
+              <AlertTriangle size={18} />
+              {t('resetTokenMissing')}
+            </div>
+          ) : (
+            <form className="auth-form" onSubmit={(event) => { event.preventDefault(); resetPassword.mutate(); }}>
+              <label>
+                {t('password')}
+                <input
+                  required
+                  minLength={8}
+                  type="password"
+                  value={form.password}
+                  onChange={(event) => setForm((state) => ({ ...state, password: event.target.value }))}
+                  placeholder="Minimum 8 characters"
+                />
+              </label>
+              <label>
+                {t('confirmPassword')}
+                <input
+                  required
+                  minLength={8}
+                  type="password"
+                  value={form.confirm}
+                  onChange={(event) => setForm((state) => ({ ...state, confirm: event.target.value }))}
+                  placeholder="Repeat password"
+                />
+              </label>
+              <button type="submit" className="button primary" disabled={resetPassword.isPending}>
+                {resetPassword.isPending ? <Loader2 size={17} className="spin" /> : <KeyRound size={17} />}
+                {t('resetPasswordButton')}
+              </button>
+            </form>
+          )}
+          <Link className="text-button auth-link" to="/login">{t('backToSignIn')}</Link>
+        </section>
       </section>
     </AppShell>
   );
@@ -1595,6 +1832,7 @@ export default function App() {
       <Route path="/" element={<DashboardPage />} />
       <Route path="/raise" element={<RaiseIssuePage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/profile" element={<ProfileSettingsPage />} />
       <Route path="/admin" element={<AdminImportPage />} />
       <Route path="/issues/:id" element={<IssueDetailPage />} />

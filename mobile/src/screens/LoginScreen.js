@@ -1,15 +1,22 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView
+  StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView, Linking
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 import { useAuthStore } from '../store/authStore';
 import { useLanguageStore } from '../store/languageStore';
 import LanguagePicker from '../components/LanguagePicker';
 import { useT } from '../utils/i18n';
 import api from '../utils/api';
 import { colors } from '../utils/theme';
+
+WebBrowser.maybeCompleteAuthSession();
+
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '';
+const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '';
 
 export default function LoginScreen({ navigation }) {
   const { login } = useAuthStore();
@@ -19,6 +26,40 @@ export default function LoginScreen({ navigation }) {
   const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const googleConfigured = Boolean(GOOGLE_WEB_CLIENT_ID || GOOGLE_ANDROID_CLIENT_ID);
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    webClientId: GOOGLE_WEB_CLIENT_ID || undefined,
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID || undefined,
+    scopes: ['openid', 'profile', 'email'],
+  });
+
+  useEffect(() => {
+    const completeGoogleSignIn = async () => {
+      if (response?.type !== 'success') return;
+      const idToken = response.params?.id_token || response.authentication?.idToken;
+      if (!idToken) {
+        Alert.alert(t('error'), t('googleTokenMissing'));
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const { data } = await api.post('/api/auth/social', {
+          provider: 'google',
+          id_token: idToken,
+          preferred_language: language,
+        });
+        await setLanguage(data.user?.preferred_language || language);
+        await login(data.user, data.token);
+      } catch (err) {
+        Alert.alert(t('error'), err.response?.data?.error || t('googleSignInFailed'));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    completeGoogleSignIn();
+  }, [response]);
 
   const handleAuth = async () => {
     if (!form.email || !form.password) { Alert.alert('Error', 'Email and password required'); return; }
@@ -56,6 +97,46 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
+  const handleGoogle = async () => {
+    if (!googleConfigured) {
+      Alert.alert(t('googleNeedsSetup'), t('googleNeedsSetupCopy'));
+      return;
+    }
+    if (!request) {
+      Alert.alert(t('error'), t('googleUnavailable'));
+      return;
+    }
+    await promptAsync();
+  };
+
+  const handleForgotPassword = async () => {
+    if (!form.email) {
+      Alert.alert(t('error'), t('emailRequired'));
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data } = await api.post('/api/auth/forgot-password', { email: form.email });
+      if (data.reset_url) {
+        Alert.alert(t('resetLinkSent'), t('resetEmailNotConfigured'), [
+          { text: t('cancel'), style: 'cancel' },
+          { text: t('openResetLink'), onPress: () => Linking.openURL(data.reset_url) },
+        ]);
+      } else if (data.email_configured) {
+        Alert.alert(t('resetLinkSent'), t('resetEmailConfigured'));
+      } else {
+        Alert.alert(t('resetLinkSent'), t('resetIfAccountExists'));
+      }
+      setMode('email');
+      setIsRegister(false);
+    } catch (err) {
+      Alert.alert(t('error'), err.response?.data?.error || t('resetRequestFailed'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
@@ -81,6 +162,9 @@ export default function LoginScreen({ navigation }) {
           <View style={styles.btns}>
             <TouchableOpacity style={styles.btnPrimary} onPress={() => setMode('email')}>
               <Text style={styles.btnPrimaryTxt}>✉  {t('continueEmail')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.btnGoogle} onPress={handleGoogle} disabled={loading}>
+              <Text style={styles.btnGoogleTxt}>G  {t('continueWithGoogle')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.btnOutline} onPress={handleDemo} disabled={loading}>
               <Text style={styles.btnOutlineTxt}>{loading ? 'Loading…' : `⚡  ${t('quickDemo')}`}</Text>
@@ -112,10 +196,36 @@ export default function LoginScreen({ navigation }) {
               <Text style={styles.btnPrimaryTxt}>{loading ? t('pleaseWait') : isRegister ? t('createAccount') : t('signIn')}</Text>
             </TouchableOpacity>
 
+            <TouchableOpacity style={styles.btnGoogle} onPress={handleGoogle} disabled={loading}>
+              <Text style={styles.btnGoogleTxt}>G  {t('continueWithGoogle')}</Text>
+            </TouchableOpacity>
+
+            {!isRegister && (
+              <TouchableOpacity onPress={() => setMode('forgot')}>
+                <Text style={styles.linkTxt}>{t('forgotPasswordQuestion')}</Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity onPress={() => setIsRegister(!isRegister)}>
-              <Text style={{ color: colors.accent2, textAlign: 'center', fontSize: 13, marginTop: 12 }}>
-                {isRegister ? 'Already have an account? Sign in' : "New here? Create account"}
+              <Text style={styles.linkTxt}>
+                {isRegister ? t('alreadyHaveAccount') : t('newHere')}
               </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {mode === 'forgot' && (
+          <View style={styles.form}>
+            <TouchableOpacity onPress={() => { setMode('email'); setIsRegister(false); }} style={styles.backRow}>
+              <Text style={styles.backTxt}>← {t('back')}</Text>
+              <Text style={styles.formTitle}>{t('forgotPassword')}</Text>
+            </TouchableOpacity>
+            <Text style={styles.helpTxt}>{t('forgotPasswordCopy')}</Text>
+            <TextInput style={styles.input} placeholder={t('email')} placeholderTextColor={colors.text3}
+              keyboardType="email-address" autoCapitalize="none"
+              value={form.email} onChangeText={text => setForm(prev => ({ ...prev, email: text }))} />
+            <TouchableOpacity style={[styles.btnPrimary, { opacity: loading ? 0.7 : 1 }]} onPress={handleForgotPassword} disabled={loading}>
+              <Text style={styles.btnPrimaryTxt}>{loading ? t('pleaseWait') : t('sendResetLink')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -139,10 +249,14 @@ const styles = StyleSheet.create({
   btnPrimaryTxt: { color: '#fff', fontSize: 15, fontWeight: '700' },
   btnOutline: { backgroundColor: 'rgba(16,185,129,0.1)', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(16,185,129,0.25)' },
   btnOutlineTxt: { color: colors.green2, fontSize: 14, fontWeight: '600' },
+  btnGoogle: { backgroundColor: '#fff', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#D7DEE9' },
+  btnGoogleTxt: { color: '#1F2937', fontSize: 14, fontWeight: '800' },
   terms: { textAlign: 'center', fontSize: 11, color: colors.text3, marginTop: 8 },
   form: { width: '100%', gap: 12 },
   backRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 4 },
   backTxt: { color: colors.text3, fontSize: 16 },
   formTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
   input: { backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, color: colors.text, fontSize: 14 },
+  linkTxt: { color: colors.accent2, textAlign: 'center', fontSize: 13, marginTop: 4, fontWeight: '700' },
+  helpTxt: { color: colors.text2, fontSize: 13, lineHeight: 20 },
 });
