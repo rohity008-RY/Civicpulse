@@ -82,7 +82,7 @@ export default function LoginPage() {
           </svg>
         </div>
         <h1 style={{ fontFamily: 'Sora, sans-serif', fontSize: 28, fontWeight: 800, letterSpacing: '-0.03em' }}>
-          CivicPulse
+          CivicsPulse
         </h1>
         <p style={{ color: 'var(--text2)', marginTop: 8, fontSize: 14, lineHeight: 1.5 }}>
           Raise issues. Track resolutions.<br/>Hold your representative accountable.

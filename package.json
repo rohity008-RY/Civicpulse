@@ -1,7 +1,7 @@
 {
   "name": "civicpulse",
   "version": "1.0.0",
-  "description": "CivicPulse — Civic Accountability Platform",
+  "description": "CivicsPulse — Civic Accountability Platform",
   "private": true,
   "workspaces": ["backend", "frontend"],
   "scripts": {

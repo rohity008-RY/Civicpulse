@@ -1,4 +1,4 @@
-# CivicPulse 🛡️
+# CivicsPulse 🛡️
 ### Civic Accountability Platform — Mumbai & Beyond
 
 > Raise issues. Track resolutions. Hold your representative accountable.

@@ -1,4 +1,4 @@
--- CivicPulse representative import + state/city/ward hierarchy
+-- CivicsPulse representative import + state/city/ward hierarchy
 -- Safe to run multiple times in Supabase SQL editor or psql.
 
 ALTER TABLE zones ADD COLUMN IF NOT EXISTS state_code TEXT DEFAULT 'MH';

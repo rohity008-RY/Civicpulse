@@ -32,7 +32,7 @@ const normalizeEmail = (email) => (email ? String(email).trim().toLowerCase() : 
 // ─── Register with email/password ────────────────────────────
 router.post('/register', async (req, res) => {
   try {
-    const { name, phone, password, preferred_language } = req.body;
+    const { name, phone, password, preferred_language, home_ward_id } = req.body;
     const email = normalizeEmail(req.body.email);
     if (!name || (!email && !phone))
       return res.status(400).json({ error: 'Name and email or phone required' });
@@ -45,14 +45,27 @@ router.post('/register', async (req, res) => {
       .select('id').or(`email.eq.${email},phone.eq.${phone}`).maybeSingle();
     if (existing) return res.status(409).json({ error: 'Account already exists' });
 
+    let homeWardId = null;
+    if (home_ward_id) {
+      const { data: ward, error: wardError } = await supabase
+        .from('wards')
+        .select('id')
+        .eq('id', home_ward_id)
+        .maybeSingle();
+      if (wardError) throw wardError;
+      if (!ward) return res.status(400).json({ error: 'Invalid home_ward_id' });
+      homeWardId = ward.id;
+    }
+
     const { data: user, error } = await supabase.from('users').insert({
       id: uuidv4(), name, email, phone,
       password_hash: hash,
       role: 'CITIZEN',
       email_verified: false,
+      home_ward_id: homeWardId,
       preferred_language: normalizeLanguage(preferred_language),
       is_active: true
-    }).select().single();
+    }).select('*, wards(id, name, ward_number, city, state_name, zone_id)').single();
 
     if (error) throw error;
 
@@ -100,7 +113,7 @@ router.post('/login', async (req, res) => {
 // ─── Social login (Google) ───────────────────────────────────
 router.post('/social', async (req, res) => {
   try {
-    const { provider, id_token, preferred_language } = req.body;
+    const { provider, id_token, preferred_language, home_ward_id } = req.body;
     if (provider !== 'google') {
       return res.status(400).json({ error: 'Only Google sign-in is supported' });
     }
@@ -153,6 +166,16 @@ router.post('/social', async (req, res) => {
 
     const updates = { last_active_at: new Date() };
     if (preferred_language) updates.preferred_language = normalizeLanguage(preferred_language);
+    if (home_ward_id) {
+      const { data: ward, error: wardError } = await supabase
+        .from('wards')
+        .select('id')
+        .eq('id', home_ward_id)
+        .maybeSingle();
+      if (wardError) throw wardError;
+      if (!ward) return res.status(400).json({ error: 'Invalid home_ward_id' });
+      updates.home_ward_id = ward.id;
+    }
     if (!user.avatar_url && googleUser.avatar_url) updates.avatar_url = googleUser.avatar_url;
     if (!user.email_verified) updates.email_verified = true;
     const { data: updatedUser, error: updateError } = await supabase

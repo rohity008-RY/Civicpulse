@@ -16,13 +16,14 @@ import CreateIssueScreen from './src/screens/CreateIssueScreen';
 import FeedListScreen from './src/screens/FeedListScreen';
 import IssueDetailScreen from './src/screens/IssueDetailScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import RepDashboardScreen from './src/screens/RepDashboardScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab   = createBottomTabNavigator();
 const qc    = new QueryClient({ defaultOptions: { queries: { staleTime: 30000, retry: 1 } } });
 
-const TAB_ICON = { Home: '🏠', Escalated: '📢', Create: '➕', Trending: '🔥', Profile: '👤' };
-const TAB_LABEL = { Home: 'home', Escalated: 'escalated', Create: 'create', Trending: 'trending', Profile: 'profile' };
+const TAB_ICON = { Home: '🏠', Escalated: '📢', Create: '➕', Trending: '🔥', Rep: '🪪', Profile: '👤' };
+const TAB_LABEL = { Home: 'home', Escalated: 'escalated', Create: 'create', Trending: 'trending', Rep: 'repDashboard', Profile: 'profile' };
 
 function EscalatedScreen(props) {
   return <FeedListScreen {...props} mode="escalated" />;
@@ -43,6 +44,8 @@ function TabIcon({ name, focused }) {
 
 function TabNavigator() {
   const { t } = useT();
+  const { user } = useAuthStore();
+  const isRep = ['CORPORATOR', 'MLA', 'MP'].includes(user?.role);
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -66,6 +69,7 @@ function TabNavigator() {
       <Tab.Screen name="Escalated"  component={EscalatedScreen} />
       <Tab.Screen name="Create"     component={CreateIssueScreen} />
       <Tab.Screen name="Trending"   component={TrendingScreen} />
+      {isRep && <Tab.Screen name="Rep" component={RepDashboardScreen} />}
       <Tab.Screen name="Profile"    component={ProfileScreen} />
     </Tab.Navigator>
   );

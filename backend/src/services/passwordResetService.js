@@ -66,10 +66,10 @@ async function sendPasswordResetEmail({ to, name, resetUrl }) {
     body: JSON.stringify({
       from,
       to,
-      subject: 'Reset your CivicPulse password',
+      subject: 'Reset your CivicsPulse password',
       html: `
         <p>Hello ${name || 'Citizen'},</p>
-        <p>Use this secure link to reset your CivicPulse password. It expires in ${RESET_EXPIRY_MINUTES} minutes.</p>
+        <p>Use this secure link to reset your CivicsPulse password. It expires in ${RESET_EXPIRY_MINUTES} minutes.</p>
         <p><a href="${resetUrl}">Reset password</a></p>
         <p>If you did not request this, you can ignore this email.</p>
       `,

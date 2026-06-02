@@ -5,6 +5,7 @@ const en = {
   escalated: 'Escalated',
   create: 'Create',
   trending: 'Trending',
+  repDashboard: 'Rep',
   profile: 'Profile',
   language: 'Language',
   continueEmail: 'Continue with Email',
@@ -27,7 +28,7 @@ const en = {
   googleSignInFailed: 'Google sign-in failed',
   forgotPassword: 'Forgot password',
   forgotPasswordQuestion: 'Forgot password?',
-  forgotPasswordCopy: 'Enter your email and CivicPulse will send a secure reset link.',
+  forgotPasswordCopy: 'Enter your email and CivicsPulse will send a secure reset link.',
   sendResetLink: 'Send reset link',
   resetLinkSent: 'Reset request received',
   resetEmailConfigured: 'Check your email for the reset link.',
@@ -122,13 +123,13 @@ const dictionaries = {
 Object.assign(dictionaries.hi, {
   continueWithGoogle: 'Google से जारी रखें', back: 'वापस', alreadyHaveAccount: 'पहले से खाता है? साइन इन', newHere: 'नए हैं? खाता बनाएं',
   googleNeedsSetup: 'Google साइन-इन सेटअप चाहिए', googleNeedsSetupCopy: 'Google साइन-इन के लिए OAuth client IDs जोड़ें.', googleUnavailable: 'Google साइन-इन अभी उपलब्ध नहीं', googleTokenMissing: 'Google ने सुरक्षित टोकन नहीं भेजा.', googleSignInFailed: 'Google साइन-इन विफल',
-  forgotPassword: 'पासवर्ड भूल गए', forgotPasswordQuestion: 'पासवर्ड भूल गए?', forgotPasswordCopy: 'ईमेल डालें, CivicPulse सुरक्षित रीसेट लिंक भेजेगा.', sendResetLink: 'रीसेट लिंक भेजें', resetLinkSent: 'रीसेट अनुरोध मिला', resetEmailConfigured: 'रीसेट लिंक के लिए ईमेल देखें.', resetEmailNotConfigured: 'ईमेल डिलीवरी सेट नहीं है. demo reset link उपयोग करें.', resetIfAccountExists: 'अगर यह खाता मौजूद है, ईमेल डिलीवरी सेट होने के बाद रीसेट लिंक काम करेगा.', openResetLink: 'रीसेट लिंक खोलें', resetRequestFailed: 'रीसेट अनुरोध विफल', emailRequired: 'ईमेल जरूरी है', cancel: 'रद्द करें',
+  forgotPassword: 'पासवर्ड भूल गए', forgotPasswordQuestion: 'पासवर्ड भूल गए?', forgotPasswordCopy: 'ईमेल डालें, CivicsPulse सुरक्षित रीसेट लिंक भेजेगा.', sendResetLink: 'रीसेट लिंक भेजें', resetLinkSent: 'रीसेट अनुरोध मिला', resetEmailConfigured: 'रीसेट लिंक के लिए ईमेल देखें.', resetEmailNotConfigured: 'ईमेल डिलीवरी सेट नहीं है. demo reset link उपयोग करें.', resetIfAccountExists: 'अगर यह खाता मौजूद है, ईमेल डिलीवरी सेट होने के बाद रीसेट लिंक काम करेगा.', openResetLink: 'रीसेट लिंक खोलें', resetRequestFailed: 'रीसेट अनुरोध विफल', emailRequired: 'ईमेल जरूरी है', cancel: 'रद्द करें',
 });
 
 Object.assign(dictionaries.mr, {
   continueWithGoogle: 'Google ने पुढे जा', back: 'मागे', alreadyHaveAccount: 'खाते आहे? साइन इन', newHere: 'नवीन आहात? खाते तयार करा',
   googleNeedsSetup: 'Google साइन-इन सेटअप हवा', googleNeedsSetupCopy: 'Google साइन-इनसाठी OAuth client IDs जोडा.', googleUnavailable: 'Google साइन-इन उपलब्ध नाही', googleTokenMissing: 'Google ने सुरक्षित टोकन दिले नाही.', googleSignInFailed: 'Google साइन-इन अयशस्वी',
-  forgotPassword: 'पासवर्ड विसरलात', forgotPasswordQuestion: 'पासवर्ड विसरलात?', forgotPasswordCopy: 'ईमेल टाका, CivicPulse सुरक्षित reset link पाठवेल.', sendResetLink: 'रीसेट लिंक पाठवा', resetLinkSent: 'रीसेट विनंती मिळाली', resetEmailConfigured: 'रीसेट लिंकसाठी ईमेल तपासा.', resetEmailNotConfigured: 'ईमेल डिलिव्हरी सेट नाही. demo reset link वापरा.', resetIfAccountExists: 'हे खाते असल्यास, ईमेल डिलिव्हरी सेट झाल्यावर रीसेट लिंक काम करेल.', openResetLink: 'रीसेट लिंक उघडा', resetRequestFailed: 'रीसेट विनंती अयशस्वी', emailRequired: 'ईमेल आवश्यक आहे', cancel: 'रद्द',
+  forgotPassword: 'पासवर्ड विसरलात', forgotPasswordQuestion: 'पासवर्ड विसरलात?', forgotPasswordCopy: 'ईमेल टाका, CivicsPulse सुरक्षित reset link पाठवेल.', sendResetLink: 'रीसेट लिंक पाठवा', resetLinkSent: 'रीसेट विनंती मिळाली', resetEmailConfigured: 'रीसेट लिंकसाठी ईमेल तपासा.', resetEmailNotConfigured: 'ईमेल डिलिव्हरी सेट नाही. demo reset link वापरा.', resetIfAccountExists: 'हे खाते असल्यास, ईमेल डिलिव्हरी सेट झाल्यावर रीसेट लिंक काम करेल.', openResetLink: 'रीसेट लिंक उघडा', resetRequestFailed: 'रीसेट विनंती अयशस्वी', emailRequired: 'ईमेल आवश्यक आहे', cancel: 'रद्द',
 });
 
 export function t(language, key) {

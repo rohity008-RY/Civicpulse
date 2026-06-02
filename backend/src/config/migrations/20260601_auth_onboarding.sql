@@ -1,4 +1,4 @@
--- CivicPulse auth onboarding: verified Google login + password reset
+-- CivicsPulse auth onboarding: verified Google login + password reset
 
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;

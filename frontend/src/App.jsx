@@ -222,7 +222,7 @@ function AppShell({ children }) {
         <Link to="/" className="brand">
           <img src="/icon.png" alt="" className="brand-mark" />
           <span>
-            <strong>CivicPulse</strong>
+            <strong>CivicsPulse</strong>
             <small>Mumbai civic reporting</small>
           </span>
         </Link>
@@ -231,6 +231,7 @@ function AppShell({ children }) {
           <Link to="/">{t('feed')}</Link>
           <Link to="/raise">{t('raiseIssue')}</Link>
           {isAuthenticated && <Link to="/profile">{t('profile')}</Link>}
+          {['CORPORATOR', 'MLA', 'MP'].includes(user?.role) && <Link to="/rep">Rep desk</Link>}
           {user?.role === 'ADMIN' && <Link to="/admin">{t('admin')}</Link>}
         </nav>
 
@@ -281,7 +282,7 @@ function StatStrip() {
   ];
 
   return (
-    <section className="stats-grid" aria-label="CivicPulse statistics">
+    <section className="stats-grid" aria-label="CivicsPulse statistics">
       {stats.map(({ label, value, icon: Icon }) => (
         <motion.div className="stat-card" key={label} {...motionProps} whileHover={{ y: -4 }}>
           <Icon size={18} />
@@ -412,19 +413,23 @@ function DailyPuzzleCard() {
 function DashboardPage() {
   const reduced = useReducedMotion();
   const { t, language } = useT();
+  const { isAuthenticated } = useAuthStore();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [sort, setSort] = useState('newest');
+  const privateFeed = sort === 'mine' || sort === 'my_escalated';
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['issues', language, category, sort],
     queryFn: () => api.get('/api/feed/home', {
       params: {
         category: category || undefined,
-        sort,
+        sort: privateFeed ? 'newest' : sort,
+        scope: privateFeed ? sort : undefined,
         limit: 40,
       },
     }).then((r) => r.data),
+    enabled: !privateFeed || isAuthenticated,
   });
 
   const issues = useMemo(() => {
@@ -492,11 +497,23 @@ function DashboardPage() {
 
           <label className="select-field">
             <Flame size={17} />
-            <select value={sort} onChange={(event) => setSort(event.target.value)}>
+            <select
+              value={sort}
+              onChange={(event) => {
+                const next = event.target.value;
+                if ((next === 'mine' || next === 'my_escalated') && !isAuthenticated) {
+                  toast.error('Sign in to see your personal reports');
+                  return;
+                }
+                setSort(next);
+              }}
+            >
               <option value="newest">{t('newest')}</option>
               <option value="trending">{t('trending')}</option>
               <option value="upvotes">{t('mostUpvoted')}</option>
               <option value="escalated">{t('escalated')}</option>
+              <option value="mine">My Issues</option>
+              <option value="my_escalated">My Escalated</option>
             </select>
           </label>
         </div>
@@ -596,8 +613,22 @@ function AuthPanel({ compact = false, redirectTo = '/raise' }) {
   const setLanguage = useLanguageStore((state) => state.setLanguage);
   const [mode, setMode] = useState('register');
   const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [showPassword, setShowPassword] = useState(false);
+  const [wardSearch, setWardSearch] = useState('');
+  const [selectedWardId, setSelectedWardId] = useState('');
+  const [locatingWard, setLocatingWard] = useState(false);
   const [resetInfo, setResetInfo] = useState(null);
   const googleButtonRef = useRef(null);
+
+  const locations = useQuery({
+    queryKey: ['signup-locations'],
+    queryFn: () => api.get('/api/reps/locations', { params: { limit: 1000 } }).then((r) => r.data),
+    enabled: mode === 'register',
+    staleTime: 10 * 60 * 1000,
+  });
+  const wards = locations.data?.wards || [];
+  const selectedWard = wards.find((ward) => ward.id === selectedWardId);
+  const visibleWards = useMemo(() => filterWards(wards, wardSearch).slice(0, 6), [wards, wardSearch]);
 
   const finishAuth = (data, message) => {
     login(data.user, data.token);
@@ -610,7 +641,7 @@ function AuthPanel({ compact = false, redirectTo = '/raise' }) {
     mutationFn: async () => {
       const endpoint = mode === 'register' ? '/api/auth/register' : '/api/auth/login';
       const payload = mode === 'register'
-        ? { ...form, preferred_language: language }
+        ? { ...form, preferred_language: language, home_ward_id: selectedWardId }
         : { email: form.email, password: form.password, preferred_language: language };
       const { data } = await api.post(endpoint, payload);
       return data;
@@ -687,7 +718,44 @@ function AuthPanel({ compact = false, redirectTo = '/raise' }) {
       forgotPassword.mutate();
       return;
     }
+    if (mode === 'register' && !selectedWardId) {
+      toast.error('Select your ward or use current location before creating account');
+      return;
+    }
     auth.mutate();
+  };
+
+  const useCurrentWard = () => {
+    if (!navigator.geolocation) {
+      toast.error('Location is not available in this browser');
+      return;
+    }
+    setLocatingWard(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { data } = await api.get('/api/reps/ward-lookup', {
+            params: { lat: position.coords.latitude, lng: position.coords.longitude },
+          });
+          if (data.ward?.id) {
+            setSelectedWardId(data.ward.id);
+            setWardSearch(data.ward.name || data.ward.ward_number || '');
+            toast.success(`Ward detected: ${data.ward.name || data.ward.ward_number}`);
+          } else {
+            toast.error('No ward matched this location. Please search manually.');
+          }
+        } catch (error) {
+          toast.error(error.response?.data?.error || 'Could not detect ward. Please search manually.');
+        } finally {
+          setLocatingWard(false);
+        }
+      },
+      () => {
+        setLocatingWard(false);
+        toast.error('Location permission was not granted. Please search manually.');
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
   };
 
   return (
@@ -740,12 +808,57 @@ function AuthPanel({ compact = false, redirectTo = '/raise' }) {
             <input
               required
               minLength={8}
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               value={form.password}
               onChange={(event) => setForm((state) => ({ ...state, password: event.target.value }))}
               placeholder="Minimum 8 characters"
             />
+            {!!form.password && (
+              <span className="password-toggle">
+                <input
+                  type="checkbox"
+                  checked={showPassword}
+                  onChange={(event) => setShowPassword(event.target.checked)}
+                />
+                Show password
+              </span>
+            )}
           </label>
+        )}
+        {mode === 'register' && (
+          <fieldset className="signup-ward-fieldset">
+            <legend>Ward / zone number</legend>
+            <div className="ward-signup-actions">
+              <button className="button secondary" type="button" onClick={useCurrentWard} disabled={locatingWard}>
+                {locatingWard ? <Loader2 size={17} className="spin" /> : <LocateFixed size={17} />}
+                Use current location
+              </button>
+              {selectedWard && <span className="inline-status success-text">Selected {formatWard(selectedWard)}</span>}
+            </div>
+            <input
+              value={wardSearch}
+              onChange={(event) => setWardSearch(event.target.value)}
+              placeholder="Search ward, zone, city, or state"
+            />
+            <div className="ward-options compact">
+              {locations.isLoading && <span className="muted-row">Loading wards...</span>}
+              {!locations.isLoading && locations.isError && <span className="muted-row">Could not load wards. Try again or ask admin to import data.</span>}
+              {!locations.isLoading && !locations.isError && visibleWards.map((ward) => (
+                <button
+                  key={ward.id}
+                  type="button"
+                  className={selectedWardId === ward.id ? 'active' : ''}
+                  onClick={() => setSelectedWardId(ward.id)}
+                >
+                  <strong>{ward.name}</strong>
+                  <span>{formatWard(ward)}</span>
+                </button>
+              ))}
+              {!locations.isLoading && !locations.isError && !visibleWards.length && (
+                <span className="muted-row">No wards found for this search.</span>
+              )}
+            </div>
+          </fieldset>
         )}
         {mode === 'login' && (
           <button type="button" className="text-button auth-link" onClick={() => { setMode('forgot'); setResetInfo(null); }}>
@@ -830,6 +943,7 @@ function ResetPasswordPage() {
   const { t } = useT();
   const token = searchParams.get('token') || '';
   const [form, setForm] = useState({ password: '', confirm: '' });
+  const [showPassword, setShowPassword] = useState(false);
 
   const resetPassword = useMutation({
     mutationFn: async () => {
@@ -869,7 +983,7 @@ function ResetPasswordPage() {
                 <input
                   required
                   minLength={8}
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   value={form.password}
                   onChange={(event) => setForm((state) => ({ ...state, password: event.target.value }))}
                   placeholder="Minimum 8 characters"
@@ -880,11 +994,21 @@ function ResetPasswordPage() {
                 <input
                   required
                   minLength={8}
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   value={form.confirm}
                   onChange={(event) => setForm((state) => ({ ...state, confirm: event.target.value }))}
                   placeholder="Repeat password"
                 />
+                {(form.password || form.confirm) && (
+                  <span className="password-toggle">
+                    <input
+                      type="checkbox"
+                      checked={showPassword}
+                      onChange={(event) => setShowPassword(event.target.checked)}
+                    />
+                    Show password
+                  </span>
+                )}
               </label>
               <button type="submit" className="button primary" disabled={resetPassword.isPending}>
                 {resetPassword.isPending ? <Loader2 size={17} className="spin" /> : <KeyRound size={17} />}
@@ -975,14 +1099,29 @@ function RaiseIssuePage() {
     }
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
         setLocation({
           lat: position.coords.latitude,
           lng: position.coords.longitude,
           location_label: form.location_label || 'Current location',
         });
-        setLocating(false);
-        toast.success('Location added');
+        try {
+          const { data } = await api.get('/api/reps/ward-lookup', {
+            params: { lat: position.coords.latitude, lng: position.coords.longitude },
+          });
+          if (data.ward?.id) {
+            setSelectedWardId(data.ward.id);
+            setWardSearch(data.ward.name || data.ward.ward_number || '');
+            setForm((state) => ({ ...state, location_label: state.location_label || data.ward.name || 'Current location' }));
+            toast.success(`Location added and mapped to ${data.ward.name || 'ward'}`);
+          } else {
+            toast.success('Location added');
+          }
+        } catch {
+          toast.success('Location added. Select ward manually if needed.');
+        } finally {
+          setLocating(false);
+        }
       },
       () => {
         setLocating(false);
@@ -1527,7 +1666,7 @@ function ProfileSettingsPage() {
           <div>
             <p className="eyebrow">Citizen profile</p>
             <h1>{t('citizenProfile')}</h1>
-            <p className="lede">Your home ward helps CivicPulse map reports to the right corporator and MLA.</p>
+            <p className="lede">Your home ward helps CivicsPulse map reports to the right corporator and MLA.</p>
           </div>
           <AuthPanel redirectTo="/profile" />
         </section>
@@ -1547,7 +1686,7 @@ function ProfileSettingsPage() {
           <div>
             <p className="eyebrow">{t('citizenProfile')}</p>
             <h1>{user?.name || 'Citizen'}</h1>
-            <p className="lede">{user?.email || user?.phone || 'CivicPulse account'}</p>
+            <p className="lede">{user?.email || user?.phone || 'CivicsPulse account'}</p>
             <div className="profile-actions">
               <button className="button secondary" type="button" onClick={() => avatarInputRef.current?.click()} disabled={uploadAvatar.isPending}>
                 {uploadAvatar.isPending ? <Loader2 size={17} className="spin" /> : <Upload size={17} />}
@@ -1636,6 +1775,239 @@ function ProfileSettingsPage() {
   );
 }
 
+function RepresentativeDeskPage() {
+  const { isAuthenticated, user } = useAuthStore();
+  const { t, language } = useT();
+  const queryClient = useQueryClient();
+  const [statusFilter, setStatusFilter] = useState('');
+  const [statusNote, setStatusNote] = useState('');
+  const [reportForm, setReportForm] = useState(() => {
+    const now = new Date();
+    return { month: now.getMonth() + 1, year: now.getFullYear() };
+  });
+
+  const isRep = ['CORPORATOR', 'MLA', 'MP'].includes(user?.role);
+
+  const repSummary = useQuery({
+    queryKey: ['rep-summary'],
+    queryFn: () => api.get('/api/rep/me').then((r) => r.data),
+    enabled: isAuthenticated && isRep,
+  });
+
+  const issuesQuery = useQuery({
+    queryKey: ['rep-issues', language, statusFilter],
+    queryFn: () => api.get('/api/rep/me/issues', {
+      params: { status: statusFilter || undefined, limit: 100 },
+    }).then((r) => r.data),
+    enabled: isAuthenticated && isRep,
+  });
+
+  const requestsQuery = useQuery({
+    queryKey: ['rep-report-requests'],
+    queryFn: () => api.get('/api/rep/me/report-card-requests').then((r) => r.data),
+    enabled: isAuthenticated && isRep,
+  });
+
+  const updateStatus = useMutation({
+    mutationFn: ({ issueId, status }) => api.patch(`/api/issues/${issueId}/status`, { status, note: statusNote }),
+    onSuccess: () => {
+      setStatusNote('');
+      toast.success('Status updated');
+      queryClient.invalidateQueries({ queryKey: ['rep-issues'] });
+      queryClient.invalidateQueries({ queryKey: ['issues'] });
+    },
+    onError: (error) => toast.error(error.response?.data?.error || 'Status update failed'),
+  });
+
+  const requestReport = useMutation({
+    mutationFn: () => api.post('/api/rep/me/report-card-requests', reportForm),
+    onSuccess: () => {
+      toast.success('Report card request sent to admin');
+      queryClient.invalidateQueries({ queryKey: ['rep-report-requests'] });
+    },
+    onError: (error) => toast.error(error.response?.data?.error || 'Report request failed'),
+  });
+
+  const downloadExport = async (request, format) => {
+    try {
+      const { data } = await api.get(`/api/rep/report-card-requests/${request.id}/export/${format}`, { responseType: 'blob' });
+      const url = URL.createObjectURL(data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `civicspulse-report-card-${request.month}-${request.year}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Download failed');
+    }
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <AppShell>
+        <section className="auth-page">
+          <div>
+            <p className="eyebrow">Representative desk</p>
+            <h1>Sign in to manage tagged posts</h1>
+            <p className="lede">Corporator and MLA accounts are linked by admin after representative data is uploaded.</p>
+          </div>
+          <AuthPanel redirectTo="/rep" />
+        </section>
+      </AppShell>
+    );
+  }
+
+  if (!isRep) {
+    return (
+      <AppShell>
+        <section className="detail-page">
+          <div className="notice">
+            <AlertTriangle size={18} />
+            <span>Your account is a citizen account. Admin must link you as a Corporator or MLA before this desk opens.</span>
+          </div>
+        </section>
+      </AppShell>
+    );
+  }
+
+  const issues = issuesQuery.data?.issues || [];
+  const stats = repSummary.data?.stats || issuesQuery.data?.stats || {};
+  const identity = repSummary.data?.identity || issuesQuery.data?.identity;
+  const requests = requestsQuery.data?.requests || [];
+
+  return (
+    <AppShell>
+      <section className="rep-layout">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Representative desk</p>
+            <h1>{identity?.display_name || user?.name}</h1>
+            <p className="lede">Review posts tagged to your ward or zone, update status, and request approved report cards.</p>
+          </div>
+        </div>
+
+        <div className="stats-grid compact-stats">
+          {[
+            ['Tagged posts', stats.total_issues || 0],
+            ['In progress', stats.in_progress_issues || 0],
+            ['Resolved', stats.resolved_issues || 0],
+            ['Resolution rate', `${stats.resolution_rate || 0}%`],
+          ].map(([label, value]) => (
+            <div className="stat-card" key={label}>
+              <span>{value}</span>
+              <small>{label}</small>
+            </div>
+          ))}
+        </div>
+
+        <div className="rep-grid-layout">
+          <section className="admin-panel">
+            <div className="panel-title">
+              <Megaphone size={19} />
+              <h2>Tagged posts</h2>
+            </div>
+            <div className="feed-toolbar rep-toolbar">
+              <label className="select-field">
+                <ListFilter size={17} />
+                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                  <option value="">All statuses</option>
+                  <option value="OPEN">Open</option>
+                  <option value="ASSIGNED">Assigned</option>
+                  <option value="IN_PROGRESS">In progress</option>
+                  <option value="RESOLVED">Resolved</option>
+                </select>
+              </label>
+              <input value={statusNote} onChange={(event) => setStatusNote(event.target.value)} placeholder="Optional timeline note" />
+            </div>
+
+            <div className="rep-issue-list">
+              {issuesQuery.isLoading && <div className="loading-card rep-row" />}
+              {!issuesQuery.isLoading && issues.map((issue) => (
+                <article className="rep-row" key={issue.id}>
+                  <div>
+                    <span className="pill status">{statusLabel(language, issue.status)}</span>
+                    <h3>{issue.title}</h3>
+                    <p>{issue.wards?.name || issue.location_label || issue.city || 'Mapped area'}</p>
+                  </div>
+                  <div className="rep-actions">
+                    <Link className="text-button" to={`/issues/${issue.id}`}><Eye size={16} /> View</Link>
+                    <button className="button secondary" type="button" onClick={() => updateStatus.mutate({ issueId: issue.id, status: 'IN_PROGRESS' })}>
+                      In progress
+                    </button>
+                    <button className="button primary" type="button" onClick={() => updateStatus.mutate({ issueId: issue.id, status: 'RESOLVED' })}>
+                      Resolved
+                    </button>
+                  </div>
+                </article>
+              ))}
+              {!issuesQuery.isLoading && !issues.length && <p className="lede">No tagged posts found for this filter.</p>}
+            </div>
+          </section>
+
+          <aside className="admin-panel">
+            <div className="panel-title">
+              <FileText size={19} />
+              <h2>Report card</h2>
+            </div>
+            <form
+              className="report-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                requestReport.mutate();
+              }}
+            >
+              <label>
+                Month
+                <input
+                  type="number"
+                  min="1"
+                  max="12"
+                  value={reportForm.month}
+                  onChange={(event) => setReportForm((state) => ({ ...state, month: Number(event.target.value) }))}
+                />
+              </label>
+              <label>
+                Year
+                <input
+                  type="number"
+                  min="2020"
+                  max="2100"
+                  value={reportForm.year}
+                  onChange={(event) => setReportForm((state) => ({ ...state, year: Number(event.target.value) }))}
+                />
+              </label>
+              <button className="button primary" type="submit" disabled={requestReport.isPending}>
+                {requestReport.isPending ? <Loader2 size={17} className="spin" /> : <Send size={17} />}
+                Request PDF + CSV
+              </button>
+            </form>
+
+            <div className="request-list">
+              {requests.map((request) => (
+                <div className="mapping-row" key={request.id}>
+                  <strong>{request.month}/{request.year} · {request.status}</strong>
+                  <small>{new Date(request.created_at).toLocaleString()}</small>
+                  {request.status === 'APPROVED' ? (
+                    <span className="download-actions">
+                      <button className="text-button" type="button" onClick={() => downloadExport(request, 'pdf')}><Download size={15} /> PDF</button>
+                      <button className="text-button" type="button" onClick={() => downloadExport(request, 'csv')}><Download size={15} /> CSV</button>
+                    </span>
+                  ) : (
+                    <span>{request.review_note || 'Waiting for admin approval'}</span>
+                  )}
+                </div>
+              ))}
+              {!requests.length && <p className="lede">No report-card requests yet.</p>}
+            </div>
+          </aside>
+        </div>
+      </section>
+    </AppShell>
+  );
+}
+
 const SAMPLE_REP_CSV = `state_code,state_name,city,zone_name,ward_number,ward_name,corporator_name,corporator_party,corporator_phone,corporator_email,mla_name,mla_party,mla_constituency,mla_phone,mla_email,term_start,term_end,source_url
 MH,Maharashtra,Mumbai,A,A,Colaba,Colaba Corporator,Party,+911111111111,colaba-corp@example.com,Colaba MLA,Party,Colaba,+912222222222,colaba-mla@example.com,2026-01-01,,https://official-source.example/colaba
 MH,Maharashtra,Mumbai,H-West,H-West,Bandra West,Bandra Corporator,Party,+913333333333,bandra-corp@example.com,Bandra MLA,Party,Bandra West,+914444444444,bandra-mla@example.com,2026-01-01,,https://official-source.example/bandra
@@ -1646,6 +2018,7 @@ function AdminImportPage() {
   const { t } = useT();
   const [importText, setImportText] = useState(SAMPLE_REP_CSV);
   const [sourceUrl, setSourceUrl] = useState('');
+  const [linkForm, setLinkForm] = useState({ email: '', role: 'CORPORATOR', rep_id: '' });
   const queryClient = useQueryClient();
 
   const isAdmin = user?.role === 'ADMIN';
@@ -1659,6 +2032,24 @@ function AdminImportPage() {
   const imports = useQuery({
     queryKey: ['rep-imports'],
     queryFn: () => api.get('/api/admin/reps/imports').then((r) => r.data),
+    enabled: isAdmin,
+  });
+
+  const corporators = useQuery({
+    queryKey: ['admin-corporators'],
+    queryFn: () => api.get('/api/admin/reps/corporators').then((r) => r.data),
+    enabled: isAdmin,
+  });
+
+  const mlas = useQuery({
+    queryKey: ['admin-mlas'],
+    queryFn: () => api.get('/api/admin/reps/mlas').then((r) => r.data),
+    enabled: isAdmin,
+  });
+
+  const reportRequests = useQuery({
+    queryKey: ['admin-report-requests'],
+    queryFn: () => api.get('/api/admin/report-card-requests').then((r) => r.data),
     enabled: isAdmin,
   });
 
@@ -1682,6 +2073,33 @@ function AdminImportPage() {
       queryClient.invalidateQueries({ queryKey: ['rep-imports'] });
     },
     onError: (error) => toast.error(error.response?.data?.error || 'Import failed'),
+  });
+
+  const linkRepresentative = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post('/api/admin/reps/link-user', {
+        email: linkForm.email.trim(),
+        role: linkForm.role,
+        rep_id: linkForm.rep_id,
+      });
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Representative user linked');
+      setLinkForm((state) => ({ ...state, email: '', rep_id: '' }));
+      queryClient.invalidateQueries({ queryKey: ['admin-corporators'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-mlas'] });
+    },
+    onError: (error) => toast.error(error.response?.data?.error || 'Representative link failed'),
+  });
+
+  const reviewReport = useMutation({
+    mutationFn: ({ id, status }) => api.put(`/api/admin/report-card-requests/${id}`, { status }),
+    onSuccess: () => {
+      toast.success('Report request updated');
+      queryClient.invalidateQueries({ queryKey: ['admin-report-requests'] });
+    },
+    onError: (error) => toast.error(error.response?.data?.error || 'Report review failed'),
   });
 
   const readFile = async (event) => {
@@ -1720,6 +2138,8 @@ function AdminImportPage() {
 
   const wards = locations.data?.wards || [];
   const latestImports = imports.data?.imports || [];
+  const representativeOptions = linkForm.role === 'MLA' ? (mlas.data?.mlas || []) : (corporators.data?.corporators || []);
+  const pendingReports = reportRequests.data?.requests || [];
 
   return (
     <AppShell>
@@ -1807,6 +2227,88 @@ function AdminImportPage() {
 
         <section className="admin-panel">
           <div className="panel-title">
+            <ShieldCheck size={19} />
+            <h2>Representative onboarding</h2>
+          </div>
+          <form
+            className="admin-mini-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              linkRepresentative.mutate();
+            }}
+          >
+            <label>
+              Signed-up user email
+              <input
+                type="email"
+                value={linkForm.email}
+                onChange={(event) => setLinkForm((state) => ({ ...state, email: event.target.value }))}
+                placeholder="representative@example.com"
+                required
+              />
+            </label>
+            <label>
+              Role
+              <select
+                value={linkForm.role}
+                onChange={(event) => setLinkForm({ email: linkForm.email, role: event.target.value, rep_id: '' })}
+              >
+                <option value="CORPORATOR">Corporator</option>
+                <option value="MLA">MLA</option>
+              </select>
+            </label>
+            <label>
+              Representative record
+              <select
+                value={linkForm.rep_id}
+                onChange={(event) => setLinkForm((state) => ({ ...state, rep_id: event.target.value }))}
+                required
+              >
+                <option value="">Choose mapped representative</option>
+                {representativeOptions.map((rep) => (
+                  <option key={rep.id} value={rep.id}>
+                    {rep.name} · {rep.wards?.name || rep.zones?.name || rep.constituency || rep.email || 'Mapped area'}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button className="button primary" type="submit" disabled={linkRepresentative.isPending}>
+              {linkRepresentative.isPending ? <Loader2 size={17} className="spin" /> : <ShieldCheck size={17} />}
+              Link role
+            </button>
+          </form>
+        </section>
+
+        <section className="admin-panel">
+          <div className="panel-title">
+            <FileText size={19} />
+            <h2>Report-card approvals</h2>
+          </div>
+          <div className="import-history">
+            {pendingReports.map((request) => (
+              <div key={request.id} className="mapping-row report-review-row">
+                <strong>{request.rep_type} · {request.month}/{request.year} · {request.status}</strong>
+                <small>{request.users?.name || request.users?.email || request.requester_id}</small>
+                {request.status === 'REQUESTED' ? (
+                  <span className="review-actions">
+                    <button className="button primary" type="button" onClick={() => reviewReport.mutate({ id: request.id, status: 'APPROVED' })}>
+                      Approve
+                    </button>
+                    <button className="button secondary danger-button" type="button" onClick={() => reviewReport.mutate({ id: request.id, status: 'REJECTED' })}>
+                      Reject
+                    </button>
+                  </span>
+                ) : (
+                  <span>{request.review_note || `Reviewed ${request.reviewed_at ? new Date(request.reviewed_at).toLocaleString() : ''}`}</span>
+                )}
+              </div>
+            ))}
+            {!pendingReports.length && <p className="lede">No report-card requests yet.</p>}
+          </div>
+        </section>
+
+        <section className="admin-panel">
+          <div className="panel-title">
             <Clock3 size={19} />
             <h2>{t('recentImports')}</h2>
           </div>
@@ -1834,6 +2336,7 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/profile" element={<ProfileSettingsPage />} />
+      <Route path="/rep" element={<RepresentativeDeskPage />} />
       <Route path="/admin" element={<AdminImportPage />} />
       <Route path="/issues/:id" element={<IssueDetailPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />

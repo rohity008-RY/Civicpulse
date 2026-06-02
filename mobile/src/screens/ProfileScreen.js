@@ -138,7 +138,7 @@ export default function ProfileScreen() {
   };
 
   const doLogout = () => {
-    Alert.alert('Sign out', 'Do you want to sign out of CivicPulse?', [
+    Alert.alert('Sign out', 'Do you want to sign out of CivicsPulse?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign out', style: 'destructive', onPress: logout },
     ]);
@@ -156,7 +156,7 @@ export default function ProfileScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>{user?.name || 'Citizen'}</Text>
-          <Text style={styles.subtitle}>{user?.email || user?.phone || 'CivicPulse account'}</Text>
+          <Text style={styles.subtitle}>{user?.email || user?.phone || 'CivicsPulse account'}</Text>
           <View style={styles.avatarActions}>
             <TouchableOpacity onPress={pickAvatar} disabled={uploadingAvatar}>
           <Text style={styles.avatarActionText}>{uploadingAvatar ? 'Uploading…' : t('changePhoto')}</Text>

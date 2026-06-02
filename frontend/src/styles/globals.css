@@ -242,7 +242,8 @@ select:focus {
 .auth-page,
 .raise-layout,
 .detail-page,
-.admin-layout {
+.admin-layout,
+.rep-layout {
   width: min(1180px, calc(100% - 32px));
   margin: 0 auto;
   padding: 34px 0 56px;
@@ -817,6 +818,37 @@ h1 {
   font-weight: 900;
 }
 
+.password-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.password-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--blue);
+}
+
+.signup-ward-fieldset {
+  display: grid;
+  gap: 10px;
+}
+
+.ward-signup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.success-text {
+  color: var(--green);
+}
+
 .auth-divider {
   display: flex;
   align-items: center;
@@ -996,6 +1028,11 @@ legend {
   display: grid;
   gap: 8px;
   margin-top: 10px;
+}
+
+.ward-options.compact {
+  max-height: 280px;
+  overflow: auto;
 }
 
 .ward-options button {
@@ -1213,6 +1250,84 @@ legend {
   grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
   gap: 16px;
   align-items: start;
+}
+
+.rep-grid-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 16px;
+  align-items: start;
+}
+
+.compact-stats .stat-card {
+  min-height: 92px;
+}
+
+.rep-toolbar {
+  grid-template-columns: 190px minmax(0, 1fr);
+}
+
+.rep-issue-list,
+.request-list,
+.admin-mini-form {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-mini-form {
+  grid-template-columns: minmax(220px, 1fr) 170px minmax(260px, 1fr) auto;
+  align-items: end;
+}
+
+.admin-mini-form label,
+.report-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.rep-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 96px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.rep-row h3 {
+  margin: 8px 0 3px;
+  font-size: 16px;
+}
+
+.rep-row p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.rep-actions,
+.download-actions,
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.report-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.report-form .button {
+  grid-column: 1 / -1;
 }
 
 .admin-panel {
@@ -1473,6 +1588,8 @@ legend {
   .portal-hero,
   .portal-grid,
   .admin-grid,
+  .rep-grid-layout,
+  .admin-mini-form,
   .rep-grid {
     grid-template-columns: 1fr;
   }
@@ -1489,6 +1606,7 @@ legend {
   }
 
   .feed-toolbar,
+  .rep-toolbar,
   .auth-page,
   .raise-layout,
   .admin-grid {
@@ -1546,6 +1664,7 @@ legend {
   .raise-layout,
   .detail-page,
   .admin-layout,
+  .rep-layout,
   .profile-layout {
     width: min(100% - 24px, 1180px);
     padding-top: 22px;
@@ -1556,6 +1675,10 @@ legend {
   .portal-hero,
   .portal-grid,
   .admin-grid,
+  .admin-mini-form,
+  .rep-grid-layout,
+  .rep-row,
+  .report-form,
   .detail-grid,
   .coordinate-row,
   .location-row,

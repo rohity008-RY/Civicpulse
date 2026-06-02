@@ -56,7 +56,7 @@ const en = {
   googleSignInFailed: 'Google sign-in failed',
   forgotPassword: 'Forgot password',
   forgotPasswordQuestion: 'Forgot password?',
-  forgotPasswordCopy: 'Enter your account email and CivicPulse will send a secure reset link.',
+  forgotPasswordCopy: 'Enter your account email and CivicsPulse will send a secure reset link.',
   sendResetLink: 'Send reset link',
   resetLinkSent: 'Reset request received',
   resetRequestFailed: 'Reset request failed',
@@ -268,14 +268,14 @@ Object.assign(dictionaries.pa, {
 
 Object.assign(dictionaries.hi, {
   continueWithGoogle: 'Google से जारी रखें', googleNeedsSetup: 'Google साइन-इन सेटअप चाहिए', googleSigningIn: 'Google से साइन इन हो रहा है…', googleUnavailable: 'Google साइन-इन अभी उपलब्ध नहीं', googleSignInFailed: 'Google साइन-इन विफल',
-  forgotPassword: 'पासवर्ड भूल गए', forgotPasswordQuestion: 'पासवर्ड भूल गए?', forgotPasswordCopy: 'अपना ईमेल डालें, CivicPulse सुरक्षित रीसेट लिंक भेजेगा.', sendResetLink: 'रीसेट लिंक भेजें', resetLinkSent: 'रीसेट अनुरोध मिला', resetRequestFailed: 'रीसेट अनुरोध विफल', resetRequestReceived: 'रीसेट अनुरोध मिला',
+  forgotPassword: 'पासवर्ड भूल गए', forgotPasswordQuestion: 'पासवर्ड भूल गए?', forgotPasswordCopy: 'अपना ईमेल डालें, CivicsPulse सुरक्षित रीसेट लिंक भेजेगा.', sendResetLink: 'रीसेट लिंक भेजें', resetLinkSent: 'रीसेट अनुरोध मिला', resetRequestFailed: 'रीसेट अनुरोध विफल', resetRequestReceived: 'रीसेट अनुरोध मिला',
   resetEmailConfigured: 'रीसेट लिंक के लिए अपना ईमेल देखें.', resetEmailNotConfigured: 'ईमेल डिलीवरी अभी सेट नहीं है. नीचे demo reset link उपयोग करें.', resetIfAccountExists: 'अगर यह खाता मौजूद है, ईमेल डिलीवरी सेट होने के बाद रीसेट लिंक काम करेगा.', openResetLink: 'रीसेट लिंक खोलें', backToSignIn: 'साइन इन पर वापस', or: 'या',
   passwordReset: 'पासवर्ड रीसेट', chooseNewPassword: 'नया पासवर्ड चुनें', resetPasswordCopy: 'नया पासवर्ड सेट करने के लिए ईमेल वाला सुरक्षित लिंक उपयोग करें.', resetTokenMissing: 'रीसेट टोकन गायब है. नया लिंक मांगें.', confirmPassword: 'पासवर्ड पुष्टि करें', resetPasswordButton: 'पासवर्ड रीसेट करें', passwordMismatch: 'पासवर्ड मेल नहीं खाते', passwordResetDone: 'पासवर्ड रीसेट पूरा', passwordResetFailed: 'पासवर्ड रीसेट विफल',
 });
 
 Object.assign(dictionaries.mr, {
   continueWithGoogle: 'Google ने पुढे जा', googleNeedsSetup: 'Google साइन-इन सेटअप हवा', googleSigningIn: 'Google ने साइन इन होत आहे…', googleUnavailable: 'Google साइन-इन सध्या उपलब्ध नाही', googleSignInFailed: 'Google साइन-इन अयशस्वी',
-  forgotPassword: 'पासवर्ड विसरलात', forgotPasswordQuestion: 'पासवर्ड विसरलात?', forgotPasswordCopy: 'तुमचा ईमेल टाका, CivicPulse सुरक्षित reset link पाठवेल.', sendResetLink: 'रीसेट लिंक पाठवा', resetLinkSent: 'रीसेट विनंती मिळाली', resetRequestFailed: 'रीसेट विनंती अयशस्वी', resetRequestReceived: 'रीसेट विनंती मिळाली',
+  forgotPassword: 'पासवर्ड विसरलात', forgotPasswordQuestion: 'पासवर्ड विसरलात?', forgotPasswordCopy: 'तुमचा ईमेल टाका, CivicsPulse सुरक्षित reset link पाठवेल.', sendResetLink: 'रीसेट लिंक पाठवा', resetLinkSent: 'रीसेट विनंती मिळाली', resetRequestFailed: 'रीसेट विनंती अयशस्वी', resetRequestReceived: 'रीसेट विनंती मिळाली',
   resetEmailConfigured: 'रीसेट लिंकसाठी ईमेल तपासा.', resetEmailNotConfigured: 'ईमेल डिलिव्हरी अजून सेट नाही. खालील demo reset link वापरा.', resetIfAccountExists: 'हे खाते असल्यास, ईमेल डिलिव्हरी सेट झाल्यावर रीसेट लिंक काम करेल.', openResetLink: 'रीसेट लिंक उघडा', backToSignIn: 'साइन इनकडे परत', or: 'किंवा',
   passwordReset: 'पासवर्ड रीसेट', chooseNewPassword: 'नवा पासवर्ड निवडा', resetPasswordCopy: 'नवा पासवर्ड सेट करण्यासाठी ईमेलमधील सुरक्षित लिंक वापरा.', resetTokenMissing: 'रीसेट टोकन नाही. नवीन लिंक मागवा.', confirmPassword: 'पासवर्ड पुष्टी', resetPasswordButton: 'पासवर्ड रीसेट करा', passwordMismatch: 'पासवर्ड जुळत नाहीत', passwordResetDone: 'पासवर्ड रीसेट झाला', passwordResetFailed: 'पासवर्ड रीसेट अयशस्वी',
 });

@@ -14,6 +14,7 @@ const adminRoutes     = require('./routes/admin');
 const voiceRoutes     = require('./routes/voice');
 const notifRoutes     = require('./routes/notifications');
 const analyticsRoutes = require('./routes/analytics');
+const representativeDashboardRoutes = require('./routes/representativeDashboard');
 
 const { startEscalationJob } = require('./services/escalationJob');
 const { startTrendingJob }   = require('./services/trendingJob');
@@ -51,6 +52,7 @@ app.use('/api/issues',      issueRoutes);
 app.use('/api/feed',        feedRoutes);
 app.use('/api/reps',        repRoutes);
 app.use('/api/admin',       adminRoutes);
+app.use('/api/rep',         representativeDashboardRoutes);
 app.use('/api/voice',       voiceRoutes);
 app.use('/api/notifications', notifRoutes);
 app.use('/api/analytics',   analyticsRoutes);
@@ -66,7 +68,7 @@ app.use((err, req, res, next) => {
 // ─── Start Server ────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  logger.info(`CivicPulse API running on port ${PORT}`);
+  logger.info(`CivicsPulse API running on port ${PORT}`);
   // Start background jobs
   startEscalationJob();
   startTrendingJob();

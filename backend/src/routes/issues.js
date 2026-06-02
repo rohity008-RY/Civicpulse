@@ -12,13 +12,14 @@ const {
   upsertOriginalTranslation,
   primeIssueTranslations,
 } = require('../services/languageService');
+const { getRepresentativeIdentity, canManageIssue } = require('../services/representativeService');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 // ─── GET /api/issues — list with filters ─────────────────────
 router.get('/', optionalAuth, async (req, res) => {
   try {
-    const { ward_id, zone_id, state_code, city, category, status, sort = 'created_at', page = 1, limit = 20 } = req.query;
+    const { ward_id, zone_id, state_code, city, category, status, mine, escalated, sort = 'created_at', page = 1, limit = 20 } = req.query;
     let query = supabase.from('issues')
       .select(`*, users(name, avatar_url), issue_media(cdn_url, media_type),
                corporators(name, party, photo_url), mlas(name, party, photo_url),
@@ -32,6 +33,11 @@ router.get('/', optionalAuth, async (req, res) => {
     if (city) query = query.ilike('city', city);
     if (category) query = query.eq('category', category);
     if (status)   query = query.eq('status', status);
+    if (mine === 'true' || mine === true) {
+      if (!req.user) return res.status(401).json({ error: 'Sign in required for personal issues' });
+      query = query.eq('user_id', req.user.id);
+    }
+    if (escalated === 'true' || escalated === true) query = query.not('escalated_at', 'is', null);
 
     if (sort === 'trending') query = query.order('trending_score', { ascending: false });
     else query = query.order('created_at', { ascending: false });
@@ -185,6 +191,20 @@ router.patch('/:id/status', authenticate, isRep, async (req, res) => {
     const validStatuses = ['ASSIGNED','IN_PROGRESS','RESOLVED'];
     if (!validStatuses.includes(status))
       return res.status(400).json({ error: 'Invalid status' });
+
+    const { data: currentIssue, error: currentError } = await supabase.from('issues')
+      .select('id, ward_id, zone_id, corporator_id, mla_id, mp_id')
+      .eq('id', req.params.id)
+      .single();
+    if (currentError || !currentIssue) return res.status(404).json({ error: 'Issue not found' });
+
+    const identity = await getRepresentativeIdentity(req.user);
+    if (!canManageIssue(identity, currentIssue)) {
+      return res.status(403).json({
+        error: 'This issue is not mapped to your representative account',
+        code: 'ISSUE_NOT_IN_REP_SCOPE',
+      });
+    }
 
     const updates = { status, updated_at: new Date() };
     if (status === 'RESOLVED') updates.resolved_at = new Date(), updates.resolved_by_role = req.user.role;

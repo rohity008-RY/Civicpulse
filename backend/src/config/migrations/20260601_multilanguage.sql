@@ -1,4 +1,4 @@
--- CivicPulse multi-language preference + issue translation cache
+-- CivicsPulse multi-language preference + issue translation cache
 -- Safe to run multiple times in Supabase SQL editor or psql.
 
 ALTER TABLE users

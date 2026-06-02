@@ -7,7 +7,7 @@ const { resolveRequestLanguage, localizeIssues } = require('../services/language
 // ─── GET /api/feed/home ───────────────────────────────────────
 router.get('/home', optionalAuth, async (req, res) => {
   try {
-    const { ward_id, state_code, city, category, sort = 'newest', page = 1, limit = 20 } = req.query;
+    const { ward_id, state_code, city, category, status, scope, sort = 'newest', page = 1, limit = 20 } = req.query;
 
     let query = supabase.from('issues')
       .select(`id, title, description, category, status, location_label, created_at, original_language,
@@ -27,6 +27,13 @@ router.get('/home', optionalAuth, async (req, res) => {
     if (state_code) query = query.eq('state_code', String(state_code).toUpperCase());
     if (city) query = query.ilike('city', city);
     if (category) query = query.eq('category', category);
+    if (status) query = query.eq('status', status);
+
+    if (scope === 'mine' || scope === 'my_escalated') {
+      if (!req.user) return res.status(401).json({ error: 'Sign in required for personal feed' });
+      query = query.eq('user_id', req.user.id);
+      if (scope === 'my_escalated') query = query.not('escalated_at', 'is', null);
+    }
 
     switch (sort) {
       case 'trending':  query = query.order('trending_score', { ascending: false }); break;

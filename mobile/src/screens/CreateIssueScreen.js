@@ -98,9 +98,21 @@ export default function CreateIssueScreen({ navigation, route }) {
     setLocating(true);
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') { Alert.alert('Location permission denied'); setLocating(false); return; }
-    const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-    setLoc({ lat: loc.coords.latitude, lng: loc.coords.longitude });
-    setLocating(false);
+    try {
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      setLoc({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+      try {
+        const { data } = await api.get('/api/reps/ward-lookup', {
+          params: { lat: loc.coords.latitude, lng: loc.coords.longitude },
+        });
+        if (data.ward?.id) {
+          setSelectedWardId(data.ward.id);
+          setWardSearch(data.ward.name || data.ward.ward_number || '');
+        }
+      } catch {}
+    } finally {
+      setLocating(false);
+    }
   };
 
   const startRecording = async () => {

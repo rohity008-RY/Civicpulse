@@ -1,4 +1,4 @@
-# CivicPulse — Complete Setup, Deploy & Play Store Guide
+# CivicsPulse — Complete Setup, Deploy & Play Store Guide
 ## Version 2.1 | April 2026
 
 ---
@@ -128,7 +128,7 @@ UPDATE users SET role = 'ADMIN' WHERE email = 'your-email@domain.com';
 ```bash
 git init
 git add .
-git commit -m "Initial CivicPulse commit"
+git commit -m "Initial CivicsPulse commit"
 git remote add origin https://github.com/YOUR_USER/civicpulse.git
 git push -u origin main
 ```
@@ -202,7 +202,7 @@ npx expo start --android
 
 1. Play Console → **Create app**
 2. Fill in:
-   - **App name**: CivicPulse
+   - **App name**: CivicsPulse
    - **Default language**: English (India)
    - **App or game**: App
    - **Free or paid**: Free
@@ -253,7 +253,7 @@ In Play Console → your app:
 **Store Listing:**
 - Short description (80 chars): "Raise civic issues. Track resolutions. Hold reps accountable."
 - Full description (4000 chars): Use the PRD's executive summary
-- App icon: 512×512 PNG (use your CivicPulse shield logo)
+- App icon: 512×512 PNG (use your CivicsPulse shield logo)
 - Feature graphic: 1024×500 PNG
 - Screenshots: minimum 2, recommended 8 (phone screenshots)
   - Take screenshots from your running app using Android emulator
@@ -341,4 +341,4 @@ After testing:
 
 ---
 
-*CivicPulse v2.1 | Built for Mumbai, designed for India*
+*CivicsPulse v2.1 | Built for Mumbai, designed for India*

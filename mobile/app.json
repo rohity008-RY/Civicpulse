@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "CivicPulse",
+    "name": "CivicsPulse",
     "slug": "civicpulse",
     "scheme": "civicpulse",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -20,10 +20,10 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.civicpulse.app",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "CivicPulse needs your location to map your issue to the correct ward and representative.",
-        "NSMicrophoneUsageDescription": "CivicPulse needs microphone access for voice issue submission.",
-        "NSCameraUsageDescription": "CivicPulse needs camera access to photograph civic issues.",
-        "NSPhotoLibraryUsageDescription": "CivicPulse needs photo library access to attach evidence to issues."
+        "NSLocationWhenInUseUsageDescription": "CivicsPulse needs your location to map your issue to the correct ward and representative.",
+        "NSMicrophoneUsageDescription": "CivicsPulse needs microphone access for voice issue submission.",
+        "NSCameraUsageDescription": "CivicsPulse needs camera access to photograph civic issues.",
+        "NSPhotoLibraryUsageDescription": "CivicsPulse needs photo library access to attach evidence to issues."
       }
     },
     "android": {
@@ -32,7 +32,7 @@
         "backgroundColor": "#0A0E1A"
       },
       "package": "com.civicpulse.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",

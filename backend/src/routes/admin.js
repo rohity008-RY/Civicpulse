@@ -519,4 +519,105 @@ router.put('/users/:id/role', isAdmin, async (req, res) => {
   res.json({ user: data });
 });
 
+router.post('/reps/link-user', isAdmin, async (req, res) => {
+  try {
+    const { user_id, email, role, rep_type, rep_id } = req.body;
+    const targetRole = role || rep_type;
+    const validRoles = ['CORPORATOR','MLA','MP'];
+    if (!validRoles.includes(targetRole)) return res.status(400).json({ error: 'role must be CORPORATOR, MLA, or MP' });
+    if (!rep_id) return res.status(400).json({ error: 'rep_id required' });
+    if (!user_id && !email) return res.status(400).json({ error: 'user_id or email required' });
+
+    let userQuery = supabase.from('users').select('*');
+    if (user_id) userQuery = userQuery.eq('id', user_id);
+    else userQuery = userQuery.ilike('email', email);
+    const { data: user, error: userError } = await userQuery.limit(1).maybeSingle();
+    if (userError) throw userError;
+    if (!user) return res.status(404).json({ error: 'User not found. Ask them to sign up first, then link here.' });
+
+    const table = targetRole === 'CORPORATOR' ? 'corporators' : targetRole === 'MLA' ? 'mlas' : 'mps';
+    const repUpdates = { user_id: user.id };
+    if (table !== 'mps') repUpdates.updated_at = new Date();
+    const { data: rep, error: repError } = await supabase
+      .from(table)
+      .update(repUpdates)
+      .eq('id', rep_id)
+      .select('*')
+      .single();
+    if (repError) throw repError;
+
+    const { data: updatedUser, error: updateError } = await supabase
+      .from('users')
+      .update({ role: targetRole })
+      .eq('id', user.id)
+      .select('id, name, email, phone, role, is_active, created_at')
+      .single();
+    if (updateError) throw updateError;
+
+    await supabase.from('audit_log').insert({
+      actor_id: req.user.id,
+      actor_role: req.user.role,
+      action: 'REP_USER_LINKED',
+      target_type: table,
+      target_id: rep.id,
+      metadata: { user_id: user.id, role: targetRole },
+    });
+
+    res.json({ user: updatedUser, representative: rep, rep_type: targetRole });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/reps/mlas', isAdmin, async (req, res) => {
+  const { data, error } = await supabase.from('mlas')
+    .select('*, zones(name, city, state_name)')
+    .order('injected_at', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ mlas: data });
+});
+
+router.get('/report-card-requests', isAdmin, async (req, res) => {
+  const { data, error } = await supabase
+    .from('report_card_requests')
+    .select('*, users(name, email, role)')
+    .order('created_at', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ requests: data || [] });
+});
+
+router.put('/report-card-requests/:id', isAdmin, async (req, res) => {
+  try {
+    const { status, note } = req.body;
+    const nextStatus = status === 'REJECTED' ? 'REJECTED' : 'APPROVED';
+    const updates = {
+      status: nextStatus,
+      reviewed_by: req.user.id,
+      reviewed_at: new Date(),
+      updated_at: new Date(),
+    };
+    if (nextStatus === 'REJECTED') updates.review_note = note || 'Rejected by admin';
+    const { data, error } = await supabase
+      .from('report_card_requests')
+      .update(updates)
+      .eq('id', req.params.id)
+      .select('*')
+      .single();
+    if (error) throw error;
+
+    await supabase.from('audit_log').insert({
+      actor_id: req.user.id,
+      actor_role: req.user.role,
+      action: `REPORT_CARD_${nextStatus}`,
+      target_type: 'report_card_request',
+      target_id: data.id,
+      metadata: { note: note || null },
+    });
+
+    res.json({ request: data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

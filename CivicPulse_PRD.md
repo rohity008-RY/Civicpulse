@@ -1,16 +1,16 @@
-# CivicPulse Product Requirements Document
+# CivicsPulse Product Requirements Document
 
 **Version:** 1.0  
 **Date:** May 31, 2026  
-**Product:** CivicPulse  
+**Product:** CivicsPulse  
 **Audience:** Investors, municipal leaders, elected representatives, civic administration teams, implementation partners, and product/engineering reviewers  
-**Status:** Review-ready PRD based on the current CivicPulse web, mobile, and backend implementation
+**Status:** Review-ready PRD based on the current CivicsPulse web, mobile, and backend implementation
 
 ---
 
 ## 1. Executive Summary
 
-CivicPulse is a civic accountability platform that helps citizens raise local civic issues, routes each issue to the right ward and elected representative, tracks resolution progress, and creates public accountability through feeds, trends, representative mapping, and escalation workflows.
+CivicsPulse is a civic accountability platform that helps citizens raise local civic issues, routes each issue to the right ward and elected representative, tracks resolution progress, and creates public accountability through feeds, trends, representative mapping, and escalation workflows.
 
 The product currently includes:
 
@@ -22,7 +22,7 @@ The product currently includes:
 - AI-assisted voice submission using speech-to-text and NLP extraction, with safe fallback to typed issue creation.
 - SLA tracking, trending scores, escalation jobs, and representative-level accountability views.
 
-CivicPulse is designed to serve three groups at once:
+CivicsPulse is designed to serve three groups at once:
 
 1. **Citizens** get a simple way to report and track local problems.
 2. **Government representatives and civic teams** get structured, geo-mapped, evidence-backed requests.
@@ -44,7 +44,7 @@ Enable any citizen to raise a civic issue in under one minute, attach evidence, 
 
 ### Strategic Promise
 
-CivicPulse turns scattered civic complaints into structured public data:
+CivicsPulse turns scattered civic complaints into structured public data:
 
 - What issue happened?
 - Where did it happen?
@@ -68,7 +68,7 @@ Citizens often face civic problems such as potholes, garbage piles, water leaks,
 - Escalation paths are unclear when an issue remains unresolved.
 - Civic performance is hard to measure at ward, city, and representative levels.
 
-CivicPulse addresses these gaps by providing a structured, map-aware, representative-aware reporting system with public feeds, media evidence, status tracking, and escalation logic.
+CivicsPulse addresses these gaps by providing a structured, map-aware, representative-aware reporting system with public feeds, media evidence, status tracking, and escalation logic.
 
 ---
 
@@ -76,7 +76,7 @@ CivicPulse addresses these gaps by providing a structured, map-aware, representa
 
 ### 4.1 Citizens
 
-Citizens use CivicPulse to:
+Citizens use CivicsPulse to:
 
 - Register or sign in.
 - Set their home ward.
@@ -89,7 +89,7 @@ Citizens use CivicPulse to:
 
 ### 4.2 Corporators / Ward Representatives
 
-Corporators use CivicPulse to:
+Corporators use CivicsPulse to:
 
 - See issues mapped to their ward.
 - Understand public pressure and trending items.
@@ -99,7 +99,7 @@ Corporators use CivicPulse to:
 
 ### 4.3 MLAs and MPs
 
-MLAs and MPs use CivicPulse to:
+MLAs and MPs use CivicsPulse to:
 
 - Review escalated issues.
 - Monitor zone/constituency-level patterns.
@@ -108,7 +108,7 @@ MLAs and MPs use CivicPulse to:
 
 ### 4.4 Moderators
 
-Moderators use CivicPulse to:
+Moderators use CivicsPulse to:
 
 - Review public content quality.
 - Support issue categorization and triage.
@@ -116,7 +116,7 @@ Moderators use CivicPulse to:
 
 ### 4.5 Admins / Government Operations Teams
 
-Admins use CivicPulse to:
+Admins use CivicsPulse to:
 
 - Import representative mapping data.
 - Maintain state-city-ward structures.
@@ -127,7 +127,7 @@ Admins use CivicPulse to:
 
 ### 4.6 Investors and Strategic Partners
 
-Investors and partners evaluate CivicPulse for:
+Investors and partners evaluate CivicsPulse for:
 
 - Civic engagement adoption.
 - Market expansion across cities.
@@ -155,13 +155,13 @@ Investors and partners evaluate CivicPulse for:
 
 ### 5.2 Non-Goals for Current Version
 
-- CivicPulse is not a replacement for legally mandated municipal grievance systems unless formally integrated.
-- CivicPulse does not currently provide guaranteed government resolution.
-- CivicPulse does not currently include payment flows.
-- CivicPulse does not currently include full offline-first mobile support.
-- CivicPulse does not currently include production push-notification credentials.
-- CivicPulse does not currently include native iOS distribution.
-- CivicPulse does not claim legal compliance certification without separate legal review.
+- CivicsPulse is not a replacement for legally mandated municipal grievance systems unless formally integrated.
+- CivicsPulse does not currently provide guaranteed government resolution.
+- CivicsPulse does not currently include payment flows.
+- CivicsPulse does not currently include full offline-first mobile support.
+- CivicsPulse does not currently include production push-notification credentials.
+- CivicsPulse does not currently include native iOS distribution.
+- CivicsPulse does not claim legal compliance certification without separate legal review.
 
 ### 5.3 North Star Metric
 
@@ -224,7 +224,7 @@ The product is structured for India-wide expansion but current defaults and samp
 
 ### 7.1 Citizen Onboarding
 
-1. User opens CivicPulse web portal or Android app.
+1. User opens CivicsPulse web portal or Android app.
 2. User chooses email sign-in/register or demo exploration.
 3. User registers with name, email, and password.
 4. User reaches the authenticated home feed.
@@ -642,7 +642,7 @@ Deployment model:
 
 ### 12.2 Data Protection Expectations
 
-CivicPulse should follow privacy-by-design principles:
+CivicsPulse should follow privacy-by-design principles:
 
 - Collect only information needed for reporting and accountability.
 - Keep passwords hashed.
@@ -664,7 +664,7 @@ Before formal government launch:
 - Define escalation SLAs by category and ward.
 - Define official response and closure criteria.
 - Define open-data/public-dashboard boundaries.
-- Define complaint redressal disclaimers where CivicPulse is not the official grievance authority.
+- Define complaint redressal disclaimers where CivicsPulse is not the official grievance authority.
 
 ---
 
@@ -724,7 +724,7 @@ Potential report card metrics:
 
 ### 14.3 Investor Thesis
 
-CivicPulse creates value through:
+CivicsPulse creates value through:
 
 - Citizen-side network effects.
 - Representative accountability loops.
@@ -827,7 +827,7 @@ Scope:
 
 ### Product/Engineering
 
-- Should CivicPulse support iOS in the next release?
+- Should CivicsPulse support iOS in the next release?
 - Should voice support be extended with local-language UI text?
 - Should the map view be added before pilot launch?
 - Should issue duplicate detection be AI-assisted?
@@ -891,7 +891,7 @@ Recommended investor/government review bundle:
 
 ## 21. Summary
 
-CivicPulse is a working civic accountability product that combines citizen reporting, representative mapping, public feeds, media evidence, AI-assisted voice reporting, SLA escalation, and admin data governance. It is structured for pilot deployment in Mumbai and scalable to other Indian cities through a state-city-ward data model.
+CivicsPulse is a working civic accountability product that combines citizen reporting, representative mapping, public feeds, media evidence, AI-assisted voice reporting, SLA escalation, and admin data governance. It is structured for pilot deployment in Mumbai and scalable to other Indian cities through a state-city-ward data model.
 
-For investors, CivicPulse represents a scalable GovTech/civic engagement platform with measurable adoption and impact metrics. For government representatives, it provides structured citizen input, ward-level accountability, and a transparent workflow for issue visibility and escalation.
+For investors, CivicsPulse represents a scalable GovTech/civic engagement platform with measurable adoption and impact metrics. For government representatives, it provides structured citizen input, ward-level accountability, and a transparent workflow for issue visibility and escalation.
 

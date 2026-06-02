@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, RefreshControl, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, RefreshControl, Image, ScrollView } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import api from '../utils/api';
@@ -7,8 +7,8 @@ import IssueCard from '../components/IssueCard';
 import { useT } from '../utils/i18n';
 import { colors } from '../utils/theme';
 
-const FILTERS = ['All','Trending','Escalated','Resolved'];
-const SORT_MAP = { All: 'newest', Trending: 'trending', Escalated: 'escalated', Resolved: 'newest' };
+const FILTERS = ['All','Trending','Escalated','My Issues','My Escalated','Resolved'];
+const SORT_MAP = { All: 'newest', Trending: 'trending', Escalated: 'escalated', 'My Issues': 'newest', 'My Escalated': 'newest', Resolved: 'newest' };
 
 export default function HomeScreen({ navigation }) {
   const { user } = useAuthStore();
@@ -17,10 +17,11 @@ export default function HomeScreen({ navigation }) {
   const [search, setSearch]   = useState('');
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['feed', language, filter, user?.home_ward_id],
+    queryKey: ['feed', language, filter, user?.id, user?.home_ward_id],
     queryFn: () => api.get('/api/feed/home', { params: {
       sort: SORT_MAP[filter],
       status: filter === 'Resolved' ? 'RESOLVED' : undefined,
+      scope: filter === 'My Issues' ? 'mine' : filter === 'My Escalated' ? 'my_escalated' : undefined,
       ward_id: user?.home_ward_id || undefined
     }}).then(r => r.data)
   });
@@ -80,7 +81,7 @@ export default function HomeScreen({ navigation }) {
       </View>
 
       {/* Filters */}
-      <View style={styles.filterRow}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
         {FILTERS.map(f => (
           <TouchableOpacity key={f} onPress={() => setFilter(f)}
             style={[styles.chip, filter === f && styles.chipActive]}>
@@ -89,7 +90,7 @@ export default function HomeScreen({ navigation }) {
             </Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
       {/* Feed */}
       <FlatList
@@ -128,7 +129,7 @@ const styles = StyleSheet.create({
   searchBar:   { flexDirection: 'row', alignItems: 'center', gap: 8, margin: 0, marginHorizontal: 18, marginBottom: 14, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
   searchInput: { flex: 1, color: colors.text, fontSize: 13 },
   micBtn:      { width: 28, height: 28, backgroundColor: colors.accent, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  filterRow:   { flexDirection: 'row', gap: 8, paddingHorizontal: 18, marginBottom: 14 },
+  filterRow:   { flexDirection: 'row', gap: 8, paddingHorizontal: 18, paddingBottom: 2, marginBottom: 14 },
   chip:        { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 100, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.border },
   chipActive:  { backgroundColor: colors.accent, borderColor: colors.accent },
   chipTxt:     { fontSize: 12, fontWeight: '500', color: colors.text2 },
