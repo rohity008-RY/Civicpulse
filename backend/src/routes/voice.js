@@ -19,6 +19,28 @@ const getOpenAIClient = () => {
   return openaiClient;
 };
 
+function fallbackExtract(transcript) {
+  const text = String(transcript || '').trim();
+  const lower = text.toLowerCase();
+  const category = lower.match(/garbage|trash|waste|कचरा|कूड़ा/) ? 'GARBAGE'
+    : lower.match(/water|leak|pipe|पानी|गळती/) ? 'WATER'
+      : lower.match(/light|streetlight|lamp|बत्ती/) ? 'STREETLIGHT'
+        : lower.match(/tree|branch|झाड|पेड़/) ? 'TREE'
+          : lower.match(/safe|danger|crime|सुरक्षा/) ? 'SAFETY'
+            : lower.match(/pothole|road|खड्डा|गड्ढा/) ? 'POTHOLE'
+              : 'OTHER';
+  const title = text
+    ? text.replace(/\s+/g, ' ').slice(0, 80)
+    : 'Civic issue reported by voice';
+  return {
+    title,
+    category,
+    description: text || 'Voice transcript could not be parsed clearly. Please review and add details.',
+    location_hint: null,
+    urgency: category === 'SAFETY' ? 'HIGH' : 'MEDIUM',
+  };
+}
+
 // ─── POST /api/voice/transcribe ───────────────────────────────
 router.post('/transcribe', authenticate, upload.single('audio'), async (req, res) => {
   try {
@@ -96,10 +118,13 @@ Extract:
     res.json({ extracted });
   } catch (err) {
     console.error('NLP extract error:', err.message);
-    if (err.code === 'OPENAI_NOT_CONFIGURED') {
-      return res.status(503).json({ error: 'Voice issue extraction is not configured.', code: err.code });
-    }
-    res.status(422).json({ error: 'Could not extract issue details. Please fill form manually.' });
+    res.json({
+      extracted: fallbackExtract(req.body?.transcript),
+      fallback: true,
+      warning: err.code === 'OPENAI_NOT_CONFIGURED'
+        ? 'Voice AI extraction is not configured; using transcript fallback.'
+        : 'Voice AI extraction failed; using transcript fallback.',
+    });
   }
 });
 
