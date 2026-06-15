@@ -3,7 +3,7 @@ import { useAuthStore } from '../store/authStore';
 import { useLanguageStore } from '../store/languageStore';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'https://civicpulse-api-yf40.onrender.com',
+  baseURL: import.meta.env.VITE_API_URL || 'https://api.civicspulse.in',
   timeout: 30000
 });
 

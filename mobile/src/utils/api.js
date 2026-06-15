@@ -4,7 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import { useAuthStore } from '../store/authStore';
 import { useLanguageStore } from '../store/languageStore';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://civicpulse-api-yf40.onrender.com';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.civicspulse.in';
 
 const api = axios.create({ baseURL: API_URL, timeout: 30000 });
 
