@@ -17,7 +17,9 @@ CREATE TYPE comment_type AS ENUM ('CITIZEN','REP_OFFICIAL','ADMIN_NOTE');
 CREATE TYPE notification_type AS ENUM (
   'ISSUE_SUBMITTED','ISSUE_ESCALATED_MLA','ISSUE_ESCALATED_MP',
   'ISSUE_RESOLVED','COMMENT_ADDED','UPVOTE_MILESTONE',
-  'SLA_WARNING','TRENDING_ZONE','TRENDING_CITY','OFFICIAL_RESPONSE'
+  'SLA_WARNING','TRENDING_ZONE','TRENDING_CITY','OFFICIAL_RESPONSE',
+  'ISSUE_ASSIGNED','ISSUE_IN_PROGRESS','ISSUE_REOPENED','ISSUE_REPORTED',
+  'REPORT_CARD_APPROVED','REPORT_CARD_REJECTED'
 );
 
 -- ─── ZONES ────────────────────────────────────────────────────
@@ -186,6 +188,7 @@ INSERT INTO sla_config (category, sla_value, sla_unit, escalation_rep) VALUES
 -- ─── ISSUES ───────────────────────────────────────────────────
 CREATE TABLE issues (
   id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  public_id             TEXT UNIQUE,
   user_id               UUID NOT NULL REFERENCES users(id),
   title                 TEXT NOT NULL,
   description           TEXT,
@@ -209,6 +212,14 @@ CREATE TABLE issues (
   escalated_to_mp_at    TIMESTAMPTZ,
   resolved_at           TIMESTAMPTZ,
   resolved_by_role      TEXT,
+  resolved_proof_url    TEXT,
+  reopened_at           TIMESTAMPTZ,
+  reopened_by           UUID,
+  reopen_count          INTEGER NOT NULL DEFAULT 0,
+  moderation_status     TEXT NOT NULL DEFAULT 'VISIBLE' CHECK (moderation_status IN ('VISIBLE','UNDER_REVIEW','HIDDEN','REJECTED')),
+  moderation_reason     TEXT,
+  moderated_by          UUID,
+  moderated_at          TIMESTAMPTZ,
   is_anonymous          BOOLEAN DEFAULT FALSE,
   source                TEXT DEFAULT 'TYPED',
   original_language     TEXT NOT NULL DEFAULT 'en' CHECK (original_language IN ('en','hi','mr','gu','bn','ta','te','kn','ml','pa')),
@@ -230,6 +241,9 @@ CREATE INDEX idx_issues_trending ON issues(trending_score DESC) WHERE status != 
 CREATE INDEX idx_issues_location ON issues USING GIST(location);
 CREATE INDEX idx_issues_created  ON issues(created_at DESC);
 CREATE INDEX idx_issues_hierarchy ON issues(state_code, city, ward_number);
+CREATE UNIQUE INDEX idx_issues_public_id ON issues(public_id);
+CREATE INDEX idx_issues_moderation_status ON issues(moderation_status, updated_at DESC);
+CREATE INDEX idx_issues_reopened_at ON issues(reopened_at DESC) WHERE reopened_at IS NOT NULL;
 
 -- ─── ISSUE TRANSLATIONS ──────────────────────────────────────
 CREATE TABLE issue_translations (
@@ -295,6 +309,23 @@ CREATE TABLE comments (
   created_at    TIMESTAMPTZ DEFAULT NOW(),
   edited_at     TIMESTAMPTZ
 );
+
+-- ─── ISSUE REPORTS / MODERATION ─────────────────────────────
+CREATE TABLE issue_reports (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  issue_id    UUID NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+  reporter_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  reason      TEXT NOT NULL DEFAULT 'OTHER',
+  details     TEXT,
+  status      TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN','REVIEWED','DISMISSED')),
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  reviewed_by UUID,
+  reviewed_at TIMESTAMPTZ,
+  UNIQUE(issue_id, reporter_id)
+);
+
+CREATE INDEX idx_issue_reports_issue ON issue_reports(issue_id, created_at DESC);
+CREATE INDEX idx_issue_reports_status ON issue_reports(status, created_at DESC);
 
 -- ─── SHARES ───────────────────────────────────────────────────
 CREATE TABLE shares (

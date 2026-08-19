@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   BarChart3,
+  Bell,
   CalendarDays,
   Camera,
   CheckCircle2,
@@ -17,6 +18,7 @@ import {
   Eye,
   FileText,
   Flame,
+  Flag,
   Globe2,
   KeyRound,
   Lightbulb,
@@ -24,10 +26,12 @@ import {
   Loader2,
   LocateFixed,
   LogOut,
+  Map,
   MapPin,
   Mic,
   Megaphone,
   Plus,
+  RotateCcw,
   Search,
   Send,
   ShieldCheck,
@@ -211,6 +215,73 @@ function LanguageSelect({ label = false, className = '' }) {
   );
 }
 
+function NotificationCenter() {
+  const { isAuthenticated } = useAuthStore();
+  const [open, setOpen] = useState(false);
+  const queryClient = useQueryClient();
+
+  const notifications = useQuery({
+    queryKey: ['notifications'],
+    queryFn: () => api.get('/api/notifications', { params: { limit: 8 } }).then((r) => r.data),
+    enabled: isAuthenticated,
+    refetchInterval: open ? false : 60000,
+  });
+
+  const markRead = useMutation({
+    mutationFn: () => api.post('/api/notifications/mark-read', { ids: [] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+
+  if (!isAuthenticated) return null;
+
+  const list = notifications.data?.notifications || [];
+  const unread = notifications.data?.unread_count || 0;
+
+  return (
+    <div className="notification-center">
+      <button
+        className="icon-button notification-button"
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-label="Notifications"
+      >
+        <Bell size={18} />
+        {unread > 0 && <span>{unread > 9 ? '9+' : unread}</span>}
+      </button>
+      {open && (
+        <div className="notification-popover">
+          <div className="notification-head">
+            <strong>Notifications</strong>
+            {unread > 0 && (
+              <button className="text-button" type="button" onClick={() => markRead.mutate()}>
+                Mark read
+              </button>
+            )}
+          </div>
+          {notifications.isLoading ? (
+            <p className="lede">Loading updates...</p>
+          ) : list.length ? (
+            list.map((item) => (
+              <Link
+                key={item.id}
+                className={`notification-row ${item.is_read ? '' : 'unread'}`}
+                to={item.data?.issue_id ? `/issues/${item.data.issue_id}` : item.data?.report_card_request_id ? '/rep' : '/'}
+                onClick={() => setOpen(false)}
+              >
+                <strong>{item.title}</strong>
+                <span>{item.body}</span>
+                <small>{new Date(item.created_at).toLocaleString()}</small>
+              </Link>
+            ))
+          ) : (
+            <p className="lede">No notifications yet.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AppShell({ children }) {
   const { isAuthenticated, user, logout } = useAuthStore();
   const navigate = useNavigate();
@@ -237,6 +308,7 @@ function AppShell({ children }) {
 
         <div className="top-actions">
           <LanguageSelect />
+          {isAuthenticated && <NotificationCenter />}
           {isAuthenticated ? (
             <>
               <Link className="user-chip" to="/profile">
@@ -410,6 +482,66 @@ function DailyPuzzleCard() {
   );
 }
 
+function CivicPulseMapPanel() {
+  const reduced = useReducedMotion();
+  const { language } = useT();
+  const { data, isLoading } = useQuery({
+    queryKey: ['public-map-pulse', language],
+    queryFn: () => Promise.all([
+      api.get('/api/feed/map', { params: { limit: 18 } }).then((r) => r.data),
+      api.get('/api/feed/digest').then((r) => r.data),
+    ]).then(([mapData, digestData]) => ({ mapData, digestData })),
+  });
+
+  const points = data?.mapData?.points || [];
+  const hotspots = data?.digestData?.ward_hotspots || [];
+
+  return (
+    <motion.section
+      className="pulse-map-panel"
+      initial={reduced ? false : { opacity: 0, y: 16 }}
+      whileInView={reduced ? undefined : { opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.25 }}
+    >
+      <div className="panel-title">
+        <Map size={19} />
+        <h2>Live civic pulse</h2>
+      </div>
+      <div className="pulse-map-grid">
+        <div className="mini-map">
+          {isLoading ? (
+            <div className="loading-card map-loading" />
+          ) : points.length ? (
+            points.slice(0, 12).map((point, index) => (
+              <Link
+                key={point.id}
+                className={`map-pin pin-${index % 6}`}
+                to={`/issues/${point.id}`}
+                style={{ '--pin-x': `${12 + ((index * 23) % 76)}%`, '--pin-y': `${16 + ((index * 31) % 68)}%` }}
+                title={point.title}
+              >
+                <span>{point.trending_score > 10 ? '!' : index + 1}</span>
+              </Link>
+            ))
+          ) : (
+            <p className="lede">No public map items yet.</p>
+          )}
+        </div>
+        <div className="hotspot-list">
+          <strong>Ward hotspots this month</strong>
+          {hotspots.slice(0, 5).map((item) => (
+            <div className="hotspot-row" key={item.ward}>
+              <span>{item.ward}</span>
+              <small>{item.total} reports · {item.resolved} resolved · {item.escalated} escalated</small>
+            </div>
+          ))}
+          {!hotspots.length && <p className="lede">Hotspots appear after reports are raised.</p>}
+        </div>
+      </div>
+    </motion.section>
+  );
+}
+
 function DashboardPage() {
   const reduced = useReducedMotion();
   const { t, language } = useT();
@@ -448,6 +580,7 @@ function DashboardPage() {
         <PortalHero />
 
         <StatStrip />
+        <CivicPulseMapPanel />
 
         <div className="portal-grid">
           <DailyPuzzleCard />
@@ -553,8 +686,10 @@ function IssueCard({ issue, onRefresh }) {
       whileHover={reduced ? undefined : { y: -5, transition: { duration: 0.16 } }}
     >
       <div className="issue-meta">
+        {issue.public_id && <span className="pill tracking">{issue.public_id}</span>}
         <span className="pill category">{categoryLabel(language, issue.category)}</span>
         <span className="pill status">{status}</span>
+        {issue.reopen_count > 0 && <span className="pill reopened">Reopened {issue.reopen_count}x</span>}
       </div>
 
       <h2>{issue.title}</h2>
@@ -1511,14 +1646,49 @@ function IssueDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { t, language } = useT();
+  const { isAuthenticated, user } = useAuthStore();
+  const queryClient = useQueryClient();
+  const [reopenNote, setReopenNote] = useState('');
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ['issue', id, language],
     queryFn: () => api.get(`/api/issues/${id}`).then((r) => r.data),
   });
 
   const issue = data?.issue;
   const timeline = [...(issue?.issue_history || [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  const canReopen = isAuthenticated
+    && ['RESOLVED', 'CLOSED'].includes(issue?.status)
+    && (issue?.user_id === user?.id || ['ADMIN', 'MODERATOR', 'CORPORATOR', 'MLA', 'MP'].includes(user?.role));
+
+  const duplicates = useQuery({
+    queryKey: ['issue-duplicates', id],
+    queryFn: () => api.get(`/api/issues/${id}/duplicates`).then((r) => r.data),
+    enabled: !!issue,
+  });
+
+  const reopenIssue = useMutation({
+    mutationFn: () => api.post(`/api/issues/${id}/reopen`, { note: reopenNote }),
+    onSuccess: () => {
+      setReopenNote('');
+      toast.success('Issue reopened');
+      refetch();
+      queryClient.invalidateQueries({ queryKey: ['issues'] });
+    },
+    onError: (error) => toast.error(error.response?.data?.error || 'Could not reopen issue'),
+  });
+
+  const reportIssue = useMutation({
+    mutationFn: () => api.post(`/api/issues/${id}/report`, {
+      reason: 'CITIZEN_REVIEW',
+      details: 'Reported from issue detail screen',
+    }),
+    onSuccess: () => {
+      toast.success('Report sent to admin review');
+      refetch();
+    },
+    onError: (error) => toast.error(error.response?.data?.error || 'Could not report issue'),
+  });
 
   return (
     <AppShell>
@@ -1536,8 +1706,10 @@ function IssueDetailPage() {
           <div className="detail-stack">
             <article className="detail-card">
               <div className="issue-meta">
+                {issue.public_id && <span className="pill tracking">{issue.public_id}</span>}
                 <span className="pill category">{categoryLabel(language, issue.category)}</span>
                 <span className="pill status">{statusLabel(language, issue.status)}</span>
+                {issue.moderation_status === 'UNDER_REVIEW' && <span className="pill review">Under review</span>}
               </div>
               <h1>{issue.title}</h1>
               <p>{issue.description || t('noDescription')}</p>
@@ -1545,8 +1717,44 @@ function IssueDetailPage() {
                 <span><MapPin size={17} /> {issue.wards?.name || issue.location_label || issue.city || 'Mumbai'}</span>
                 <span><ThumbsUp size={17} /> {issue.upvote_count || 0} {t('upvotes')}</span>
                 <span><Clock3 size={17} /> {formatDistanceToNow(new Date(issue.created_at), { addSuffix: true })}</span>
+                {issue.reopen_count > 0 && <span><RotateCcw size={17} /> Reopened {issue.reopen_count} time{issue.reopen_count === 1 ? '' : 's'}</span>}
+              </div>
+              <div className="issue-action-strip">
+                {canReopen && (
+                  <div className="reopen-box">
+                    <input
+                      value={reopenNote}
+                      onChange={(event) => setReopenNote(event.target.value)}
+                      placeholder="Why should this be reopened?"
+                    />
+                    <button className="button primary" type="button" onClick={() => reopenIssue.mutate()} disabled={reopenIssue.isPending}>
+                      {reopenIssue.isPending ? <Loader2 size={17} className="spin" /> : <RotateCcw size={17} />}
+                      Reopen
+                    </button>
+                  </div>
+                )}
+                {isAuthenticated && user?.id !== issue.user_id && (
+                  <button className="button secondary" type="button" onClick={() => reportIssue.mutate()} disabled={reportIssue.isPending}>
+                    {reportIssue.isPending ? <Loader2 size={17} className="spin" /> : <Flag size={17} />}
+                    Report
+                  </button>
+                )}
               </div>
             </article>
+
+            {(duplicates.data?.duplicates || []).length > 0 && (
+              <section className="detail-card">
+                <h2>Similar nearby reports</h2>
+                <div className="duplicate-list">
+                  {duplicates.data.duplicates.map((duplicate) => (
+                    <Link className="duplicate-row" key={duplicate.id} to={`/issues/${duplicate.id}`}>
+                      <strong>{duplicate.public_id || 'Similar issue'} · {duplicate.title}</strong>
+                      <span>{duplicate.wards?.name || duplicate.location_label || duplicate.city || 'Mapped area'} · {duplicate.status}</span>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
 
             <section className="detail-card">
               <h2>{t('mappedReps')}</h2>
@@ -2053,6 +2261,12 @@ function AdminImportPage() {
     enabled: isAdmin,
   });
 
+  const moderationQueue = useQuery({
+    queryKey: ['admin-moderation-issues'],
+    queryFn: () => api.get('/api/admin/moderation/issues', { params: { status: 'ALL' } }).then((r) => r.data),
+    enabled: isAdmin,
+  });
+
   const uploadImport = useMutation({
     mutationFn: async () => {
       if (sourceUrl.trim() && !importText.trim()) {
@@ -2102,6 +2316,19 @@ function AdminImportPage() {
     onError: (error) => toast.error(error.response?.data?.error || 'Report review failed'),
   });
 
+  const reviewModeration = useMutation({
+    mutationFn: ({ id, moderation_status }) => api.put(`/api/admin/moderation/issues/${id}`, {
+      moderation_status,
+      moderation_reason: moderation_status === 'VISIBLE' ? 'Reviewed and restored by admin' : 'Reviewed by admin',
+    }),
+    onSuccess: () => {
+      toast.success('Moderation updated');
+      queryClient.invalidateQueries({ queryKey: ['admin-moderation-issues'] });
+      queryClient.invalidateQueries({ queryKey: ['issues'] });
+    },
+    onError: (error) => toast.error(error.response?.data?.error || 'Moderation update failed'),
+  });
+
   const readFile = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -2140,6 +2367,7 @@ function AdminImportPage() {
   const latestImports = imports.data?.imports || [];
   const representativeOptions = linkForm.role === 'MLA' ? (mlas.data?.mlas || []) : (corporators.data?.corporators || []);
   const pendingReports = reportRequests.data?.requests || [];
+  const moderationIssues = moderationQueue.data?.issues || [];
 
   return (
     <AppShell>
@@ -2304,6 +2532,35 @@ function AdminImportPage() {
               </div>
             ))}
             {!pendingReports.length && <p className="lede">No report-card requests yet.</p>}
+          </div>
+        </section>
+
+        <section className="admin-panel">
+          <div className="panel-title">
+            <Flag size={19} />
+            <h2>Moderation queue</h2>
+          </div>
+          <div className="import-history">
+            {moderationQueue.isLoading && <div className="loading-card moderation-row" />}
+            {!moderationQueue.isLoading && moderationIssues.map((item) => (
+              <div key={item.id} className="mapping-row moderation-row">
+                <strong>{item.public_id || 'Issue'} · {item.title}</strong>
+                <small>{item.moderation_status} · {item.wards?.name || item.city || 'Mapped area'} · {item.reports?.length || 0} report(s)</small>
+                {item.reports?.[0] && <span>{item.reports[0].reason}: {item.reports[0].details || 'No details'}</span>}
+                <span className="review-actions">
+                  <button className="button primary" type="button" onClick={() => reviewModeration.mutate({ id: item.id, moderation_status: 'VISIBLE' })}>
+                    Restore
+                  </button>
+                  <button className="button secondary" type="button" onClick={() => reviewModeration.mutate({ id: item.id, moderation_status: 'HIDDEN' })}>
+                    Hide
+                  </button>
+                  <button className="button secondary danger-button" type="button" onClick={() => reviewModeration.mutate({ id: item.id, moderation_status: 'REJECTED' })}>
+                    Reject
+                  </button>
+                </span>
+              </div>
+            ))}
+            {!moderationQueue.isLoading && !moderationIssues.length && <p className="lede">No moderation items currently need review.</p>}
           </div>
         </section>
 

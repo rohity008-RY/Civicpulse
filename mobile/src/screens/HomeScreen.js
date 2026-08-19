@@ -44,6 +44,14 @@ export default function HomeScreen({ navigation }) {
 
   const hr = new Date().getHours();
   const greeting = hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
+  const filterLabel = (item) => {
+    if (item === 'Trending') return `🔥 ${t('trending')}`;
+    if (item === 'All') return t('all');
+    if (item === 'Escalated') return t('escalated');
+    if (item === 'Resolved') return t('resolved');
+    if (item === 'My Escalated') return 'My Esc.';
+    return item;
+  };
 
   return (
     <View style={styles.container}>
@@ -90,8 +98,13 @@ export default function HomeScreen({ navigation }) {
         {FILTERS.map(f => (
           <TouchableOpacity key={f} onPress={() => setFilter(f)}
             style={[styles.chip, filter === f && styles.chipActive]}>
-            <Text style={[styles.chipTxt, filter === f && styles.chipTxtActive]}>
-              {f === 'Trending' ? `🔥 ${t('trending')}` : f === 'All' ? t('all') : f === 'Escalated' ? t('escalated') : f === 'Resolved' ? t('resolved') : f}
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.82}
+              style={[styles.chipTxt, filter === f && styles.chipTxtActive]}
+            >
+              {filterLabel(f)}
             </Text>
           </TouchableOpacity>
         ))}
@@ -136,9 +149,9 @@ const styles = StyleSheet.create({
   micBtn:      { width: 28, height: 28, backgroundColor: colors.accent, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   filterScroller: { flexGrow: 0, flexShrink: 0, height: 42, maxHeight: 42, marginBottom: 14 },
   filterRow:   { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 18 },
-  chip:        { height: 34, paddingHorizontal: 14, borderRadius: 100, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  chip:        { height: 34, minWidth: 64, maxWidth: 124, paddingHorizontal: 14, borderRadius: 100, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   chipActive:  { backgroundColor: colors.accent, borderColor: colors.accent },
-  chipTxt:     { fontSize: 12, fontWeight: '500', color: colors.text2 },
+  chipTxt:     { fontSize: 12, fontWeight: '500', color: colors.text2, includeFontPadding: false },
   chipTxtActive:{ color: '#fff' },
   list:        { paddingHorizontal: 14, paddingBottom: 100 },
 });

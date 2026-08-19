@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, ActivityIndicator
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, ActivityIndicator, Alert, TextInput
 } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import api from '../utils/api';
+import { useAuthStore } from '../store/authStore';
 import { categoryLabel, statusLabel, useT } from '../utils/i18n';
 import { colors, CAT_CONFIG, STATUS_CONFIG } from '../utils/theme';
 
@@ -33,6 +34,9 @@ function RepBlock({ title, rep }) {
 export default function IssueDetailScreen({ navigation, route }) {
   const { id } = route.params || {};
   const { t, language } = useT();
+  const { isAuthenticated, user } = useAuthStore();
+  const queryClient = useQueryClient();
+  const [reopenNote, setReopenNote] = useState('');
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['issue-detail', id, language],
@@ -44,6 +48,41 @@ export default function IssueDetailScreen({ navigation, route }) {
   const cat = CAT_CONFIG[issue?.category] || CAT_CONFIG.OTHER;
   const status = STATUS_CONFIG[issue?.status] || STATUS_CONFIG.OPEN;
   const media = issue?.issue_media || [];
+  const canReopen = isAuthenticated
+    && ['RESOLVED', 'CLOSED'].includes(issue?.status)
+    && (issue?.user_id === user?.id || ['ADMIN', 'MODERATOR', 'CORPORATOR', 'MLA', 'MP'].includes(user?.role));
+
+  const duplicates = useQuery({
+    queryKey: ['issue-duplicates', id],
+    enabled: !!issue,
+    queryFn: () => api.get(`/api/issues/${id}/duplicates`).then((r) => r.data),
+  });
+
+  const reopenIssue = useMutation({
+    mutationFn: () => api.post(`/api/issues/${id}/reopen`, { note: reopenNote }),
+    onSuccess: async () => {
+      setReopenNote('');
+      await Promise.all([
+        refetch(),
+        queryClient.invalidateQueries({ queryKey: ['feed'] }),
+        queryClient.invalidateQueries({ queryKey: ['feed-list'] }),
+      ]);
+      Alert.alert('Issue reopened', 'This report is back in the active queue.');
+    },
+    onError: (err) => Alert.alert('Reopen failed', err.response?.data?.error || 'Could not reopen this issue.'),
+  });
+
+  const reportIssue = useMutation({
+    mutationFn: () => api.post(`/api/issues/${id}/report`, {
+      reason: 'CITIZEN_REVIEW',
+      details: 'Reported from Android issue detail',
+    }),
+    onSuccess: async () => {
+      await refetch();
+      Alert.alert('Reported', 'Admin will review this issue.');
+    },
+    onError: (err) => Alert.alert('Report failed', err.response?.data?.error || 'Could not report this issue.'),
+  });
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} refreshControl={undefined}>
@@ -86,12 +125,22 @@ export default function IssueDetailScreen({ navigation, route }) {
 
           <View style={styles.card}>
             <View style={styles.metaRow}>
+              {!!issue.public_id && (
+                <View style={styles.trackingBadge}>
+                  <Text style={styles.trackingText}>{issue.public_id}</Text>
+                </View>
+              )}
               <View style={[styles.badge, { backgroundColor: cat.bg }]}>
                 <Text style={[styles.badgeText, { color: cat.color }]}>{cat.emoji} {categoryLabel(language, issue.category)}</Text>
               </View>
               <View style={[styles.badge, { backgroundColor: status.bg }]}>
                 <Text style={[styles.badgeText, { color: status.color }]}>{statusLabel(language, issue.status) || status.label}</Text>
               </View>
+              {issue.moderation_status === 'UNDER_REVIEW' && (
+                <View style={styles.reviewBadge}>
+                  <Text style={styles.reviewText}>Review</Text>
+                </View>
+              )}
             </View>
 
             <Text style={styles.title}>{issue.title}</Text>
@@ -102,8 +151,46 @@ export default function IssueDetailScreen({ navigation, route }) {
               <Text style={styles.fact}>🏙️ {[issue.city, issue.state_name].filter(Boolean).join(', ') || 'City mapping pending'}</Text>
               <Text style={styles.fact}>👍 {issue.upvote_count || 0} upvotes · 💬 {issue.comment_count || 0} comments</Text>
               <Text style={styles.fact}>⏱️ {formatDistanceToNow(new Date(issue.created_at), { addSuffix: true })}</Text>
+              {issue.reopen_count > 0 && <Text style={styles.fact}>↻ Reopened {issue.reopen_count} time{issue.reopen_count === 1 ? '' : 's'}</Text>}
             </View>
           </View>
+
+          {(canReopen || (isAuthenticated && user?.id !== issue.user_id)) && (
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Issue actions</Text>
+              {canReopen && (
+                <>
+                  <TextInput
+                    value={reopenNote}
+                    onChangeText={setReopenNote}
+                    placeholder="Why should this be reopened?"
+                    placeholderTextColor={colors.text3}
+                    style={styles.actionInput}
+                  />
+                  <TouchableOpacity style={styles.primaryAction} onPress={() => reopenIssue.mutate()} disabled={reopenIssue.isPending}>
+                    <Text style={styles.primaryActionText}>{reopenIssue.isPending ? 'Reopening...' : '↻ Reopen issue'}</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+              {isAuthenticated && user?.id !== issue.user_id && (
+                <TouchableOpacity style={styles.secondaryAction} onPress={() => reportIssue.mutate()} disabled={reportIssue.isPending}>
+                  <Text style={styles.secondaryActionText}>{reportIssue.isPending ? 'Reporting...' : '⚑ Report for admin review'}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {!!duplicates.data?.duplicates?.length && (
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Similar nearby reports</Text>
+              {duplicates.data.duplicates.map((item) => (
+                <TouchableOpacity key={item.id} style={styles.duplicateRow} onPress={() => navigation.push('IssueDetail', { id: item.id })}>
+                  <Text style={styles.duplicateTitle}>{item.public_id || 'Similar'} · {item.title}</Text>
+                  <Text style={styles.muted}>{item.wards?.name || item.location_label || item.city || 'Mapped area'} · {item.status}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>{t('mappedReps')}</Text>
@@ -149,13 +236,24 @@ const styles = StyleSheet.create({
   media: { width: 260, height: 170, borderRadius: 16, marginRight: 10, backgroundColor: colors.surface2 },
   card: { marginHorizontal: 14, marginBottom: 12, padding: 14, borderRadius: 16, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.border },
   metaRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  trackingBadge: { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 5, backgroundColor: 'rgba(59,130,246,0.15)' },
+  trackingText: { fontSize: 11, fontWeight: '900', color: colors.accent2 },
   badge: { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 5 },
   badgeText: { fontSize: 11, fontWeight: '800' },
+  reviewBadge: { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 5, backgroundColor: 'rgba(239,68,68,0.15)' },
+  reviewText: { fontSize: 11, fontWeight: '900', color: colors.red2 },
   title: { color: colors.text, fontSize: 20, lineHeight: 27, fontWeight: '900', marginBottom: 8 },
   description: { color: colors.text2, fontSize: 13, lineHeight: 20 },
   facts: { gap: 7, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
   fact: { color: colors.text2, fontSize: 12 },
   sectionTitle: { color: colors.text, fontSize: 15, fontWeight: '900', marginBottom: 12 },
+  actionInput: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12, color: colors.text, padding: 12, fontSize: 13, marginBottom: 10 },
+  primaryAction: { backgroundColor: colors.accent, borderRadius: 12, padding: 12, alignItems: 'center', marginBottom: 8 },
+  primaryActionText: { color: '#fff', fontWeight: '900', fontSize: 13 },
+  secondaryAction: { backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)', borderRadius: 12, padding: 12, alignItems: 'center' },
+  secondaryActionText: { color: colors.yellow2, fontWeight: '900', fontSize: 13 },
+  duplicateRow: { padding: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: colors.border, marginBottom: 8 },
+  duplicateTitle: { color: colors.text, fontSize: 12, fontWeight: '900', marginBottom: 3 },
   repBlock: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: colors.border, marginBottom: 8 },
   repAvatar: { width: 42, height: 42, borderRadius: 12, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   repPhoto: { width: '100%', height: '100%' },

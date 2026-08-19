@@ -26,7 +26,7 @@ export default function IssueCard({ issue, onUpvote, onPress }) {
   };
 
   const handleShare = () => {
-    Share.share({ message: `${issue.title}\nhttps://civicpulse.in/issues/${issue.id}` });
+    Share.share({ message: `${issue.public_id ? `${issue.public_id} · ` : ''}${issue.title}\nhttps://civicspulse.in/issues/${issue.id}` });
     api.post(`/api/issues/${issue.id}/share`, { platform: 'NATIVE_SHARE' }).catch(() => {});
   };
 
@@ -62,12 +62,22 @@ export default function IssueCard({ issue, onUpvote, onPress }) {
       <View style={styles.body}>
         {/* Meta */}
         <View style={styles.metaRow}>
+          {!!issue.public_id && (
+            <View style={styles.trackBadge}>
+              <Text style={styles.trackTxt}>{issue.public_id}</Text>
+            </View>
+          )}
           <View style={[styles.catBadge, { backgroundColor: cat.bg }]}>
             <Text style={[styles.catTxt, { color: cat.color }]}>{cat.emoji} {categoryLabel(language, issue.category)}</Text>
           </View>
           <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
             <Text style={[styles.statusTxt, { color: status.color }]}>{statusLabel(language, issue.status) || status.label}</Text>
           </View>
+          {issue.reopen_count > 0 && (
+            <View style={styles.reopenBadge}>
+              <Text style={styles.reopenTxt}>↻ {issue.reopen_count}</Text>
+            </View>
+          )}
         </View>
 
         {/* Title */}
@@ -129,10 +139,14 @@ const styles = StyleSheet.create({
   trendBadgeTxt: { fontSize: 10, fontWeight: '700', color: '#fff' },
   body:      { padding: 12 },
   metaRow:   { flexDirection: 'row', gap: 6, marginBottom: 6 },
+  trackBadge:{ borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: 'rgba(59,130,246,0.15)' },
+  trackTxt:  { fontSize: 10, fontWeight: '800', color: colors.accent2 },
   catBadge:  { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   catTxt:    { fontSize: 10, fontWeight: '600' },
   statusBadge:{ borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   statusTxt: { fontSize: 10, fontWeight: '600' },
+  reopenBadge:{ borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: 'rgba(245,158,11,0.15)' },
+  reopenTxt: { fontSize: 10, fontWeight: '800', color: colors.yellow2 },
   title:     { fontSize: 13, fontWeight: '600', color: colors.text, lineHeight: 18, marginBottom: 8 },
   repTag:    { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 8, marginBottom: 10 },
   repAvatar: { width: 22, height: 22, borderRadius: 6, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },

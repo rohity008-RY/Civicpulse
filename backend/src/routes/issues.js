@@ -13,8 +13,43 @@ const {
   primeIssueTranslations,
 } = require('../services/languageService');
 const { getRepresentativeIdentity, canManageIssue } = require('../services/representativeService');
+const {
+  createNotification,
+  notifyIssueOwner,
+  notifyMappedRepresentatives,
+} = require('../services/notificationService');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+
+const MODERATION_VISIBLE = ['VISIBLE', 'UNDER_REVIEW'];
+const PRIVILEGED_ROLES = ['ADMIN', 'MODERATOR'];
+
+function slugPart(value, fallback, max = 4) {
+  const cleaned = String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return (cleaned || fallback).slice(0, max);
+}
+
+function buildPublicIssueId(issue) {
+  return [
+    'CP',
+    slugPart(issue.state_code, 'IN', 2),
+    slugPart(issue.city, 'CITY', 4),
+    String(issue.id || uuidv4()).replace(/-/g, '').slice(0, 8).toUpperCase(),
+  ].join('-');
+}
+
+function canSeeModerated(user) {
+  return PRIVILEGED_ROLES.includes(user?.role);
+}
+
+function applyModerationVisibility(query, user) {
+  if (canSeeModerated(user)) return query;
+  return query.in('moderation_status', MODERATION_VISIBLE);
+}
+
+function publicIssueTitle(issue) {
+  return issue?.public_id ? `${issue.public_id}: ${issue.title}` : issue?.title || 'CivicsPulse issue';
+}
 
 // ─── GET /api/issues — list with filters ─────────────────────
 router.get('/', optionalAuth, async (req, res) => {
@@ -26,6 +61,7 @@ router.get('/', optionalAuth, async (req, res) => {
                wards(name, ward_number, city, state_name), zones(name, city, state_name)`)
       .neq('status', 'CLOSED')
       .range((page - 1) * limit, page * limit - 1);
+    query = applyModerationVisibility(query, req.user);
 
     if (ward_id)  query = query.eq('ward_id', ward_id);
     if (zone_id)  query = query.eq('zone_id', zone_id);
@@ -62,18 +98,47 @@ router.get('/', optionalAuth, async (req, res) => {
   }
 });
 
-// ─── GET /api/issues/:id ──────────────────────────────────────
-router.get('/:id', optionalAuth, async (req, res) => {
+// ─── GET /api/issues/track/:publicId — public tracking lookup ──
+router.get('/track/:publicId', optionalAuth, async (req, res) => {
   try {
-    const { data: issue, error } = await supabase.from('issues')
+    let query = supabase.from('issues')
       .select(`*, users(name, avatar_url),
                issue_media(id, cdn_url, s3_url, media_type),
-               issue_history(action, actor_role, note, created_at),
-               wards(name), zones(name),
+               issue_history(action, actor_role, note, metadata, created_at),
+               wards(name, ward_number, city, state_name), zones(name),
                corporators(id, name, party, photo_url, phone),
                mlas(id, name, party, photo_url, constituency),
                mps(id, name, party, photo_url, constituency)`)
-      .eq('id', req.params.id).single();
+      .ilike('public_id', req.params.publicId)
+      .limit(1);
+    query = applyModerationVisibility(query, req.user);
+
+    const { data: issue, error } = await query.maybeSingle();
+    if (error || !issue) return res.status(404).json({ error: 'Issue not found' });
+
+    const languageCode = resolveRequestLanguage(req);
+    const [localizedIssue] = await localizeIssues([issue], languageCode);
+    res.json({ issue: localizedIssue, language_code: languageCode });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/issues/:id ──────────────────────────────────────
+router.get('/:id', optionalAuth, async (req, res) => {
+  try {
+    let query = supabase.from('issues')
+      .select(`*, users(name, avatar_url),
+               issue_media(id, cdn_url, s3_url, media_type),
+               issue_history(action, actor_role, note, metadata, created_at),
+               wards(name, ward_number, city, state_name), zones(name),
+               corporators(id, name, party, photo_url, phone),
+               mlas(id, name, party, photo_url, constituency),
+               mps(id, name, party, photo_url, constituency)`)
+      .eq('id', req.params.id);
+    query = applyModerationVisibility(query, req.user);
+
+    const { data: issue, error } = await query.single();
 
     if (error) return res.status(404).json({ error: 'Issue not found' });
 
@@ -147,6 +212,16 @@ router.post('/', authenticate, upload.array('media', 4), async (req, res) => {
 
     if (error) throw error;
 
+    const public_id = buildPublicIssueId(issue);
+    const { data: issueWithPublicId, error: publicIdError } = await supabase
+      .from('issues')
+      .update({ public_id })
+      .eq('id', issueId)
+      .select()
+      .single();
+    if (publicIdError) throw publicIdError;
+    const savedIssue = issueWithPublicId || { ...issue, public_id };
+
     let media_warning = null;
 
     // Upload media files
@@ -165,14 +240,29 @@ router.post('/', authenticate, upload.array('media', 4), async (req, res) => {
       issue_id: issueId, action: 'CREATED', actor_id: req.user.id, actor_role: req.user.role
     });
 
-    await upsertOriginalTranslation(issue, original_language);
-    primeIssueTranslations(issue).catch((err) => {
+    await upsertOriginalTranslation(savedIssue, original_language);
+    primeIssueTranslations(savedIssue).catch((err) => {
       console.warn(`Translation priming failed for issue ${issueId}: ${err.message}`);
     });
 
+    await createNotification(
+      req.user.id,
+      'ISSUE_SUBMITTED',
+      'Issue submitted',
+      `${public_id} is now visible in your ward feed.`,
+      { issue_id: issueId, public_id }
+    );
+    notifyMappedRepresentatives(
+      savedIssue,
+      'ISSUE_ASSIGNED',
+      'New tagged issue',
+      publicIssueTitle(savedIssue),
+      { category: savedIssue.category }
+    ).catch((err) => console.warn(`Representative notification failed: ${err.message}`));
+
     res.status(201).json({
       issue: {
-        ...issue,
+        ...savedIssue,
         language_code: original_language,
         translation_status: 'original',
       },
@@ -193,7 +283,7 @@ router.patch('/:id/status', authenticate, isRep, async (req, res) => {
       return res.status(400).json({ error: 'Invalid status' });
 
     const { data: currentIssue, error: currentError } = await supabase.from('issues')
-      .select('id, ward_id, zone_id, corporator_id, mla_id, mp_id')
+      .select('id, public_id, user_id, title, status, reopen_count, ward_id, zone_id, corporator_id, mla_id, mp_id')
       .eq('id', req.params.id)
       .single();
     if (currentError || !currentIssue) return res.status(404).json({ error: 'Issue not found' });
@@ -218,7 +308,202 @@ router.patch('/:id/status', authenticate, isRep, async (req, res) => {
       actor_id: req.user.id, actor_role: req.user.role, note
     });
 
+    const notificationType = status === 'RESOLVED'
+      ? 'ISSUE_RESOLVED'
+      : status === 'IN_PROGRESS'
+        ? 'ISSUE_IN_PROGRESS'
+        : 'ISSUE_ASSIGNED';
+    await notifyIssueOwner(
+      { ...currentIssue, ...issue },
+      notificationType,
+      status === 'RESOLVED' ? 'Issue marked resolved' : 'Issue status updated',
+      `${publicIssueTitle({ ...currentIssue, ...issue })} is now ${status.replace(/_/g, ' ').toLowerCase()}.`,
+      { status, note: note || null }
+    );
+
     res.json({ issue });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/issues/:id/reopen ──────────────────────────────
+router.post('/:id/reopen', authenticate, async (req, res) => {
+  try {
+    const { note } = req.body;
+    const { data: currentIssue, error: currentError } = await supabase.from('issues')
+      .select('id, public_id, user_id, title, status, reopen_count, ward_id, zone_id, corporator_id, mla_id, mp_id')
+      .eq('id', req.params.id)
+      .single();
+    if (currentError || !currentIssue) return res.status(404).json({ error: 'Issue not found' });
+
+    const identity = await getRepresentativeIdentity(req.user);
+    const isOwner = currentIssue.user_id === req.user.id;
+    const canReopen = isOwner || canManageIssue(identity, currentIssue) || canSeeModerated(req.user);
+    if (!canReopen) return res.status(403).json({ error: 'Only the issue owner, mapped representative, or admin can reopen this issue' });
+    if (!['RESOLVED', 'CLOSED'].includes(currentIssue.status)) {
+      return res.status(400).json({ error: 'Only resolved or closed issues can be reopened' });
+    }
+
+    const { data: issue, error } = await supabase.from('issues')
+      .update({
+        status: 'OPEN',
+        resolved_at: null,
+        resolved_by_role: null,
+        reopened_at: new Date(),
+        reopened_by: req.user.id,
+        reopen_count: (currentIssue.reopen_count || 0) + 1,
+        updated_at: new Date(),
+      })
+      .eq('id', req.params.id)
+      .select()
+      .single();
+    if (error) throw error;
+
+    await supabase.from('issue_history').insert({
+      issue_id: req.params.id,
+      action: 'REOPENED',
+      actor_id: req.user.id,
+      actor_role: req.user.role,
+      note: note || 'Citizen reopened this issue for follow-up',
+    });
+
+    await notifyIssueOwner(
+      { ...currentIssue, ...issue },
+      'ISSUE_REOPENED',
+      'Issue reopened',
+      `${publicIssueTitle({ ...currentIssue, ...issue })} is open again for follow-up.`,
+      { note: note || null }
+    );
+    notifyMappedRepresentatives(
+      { ...currentIssue, ...issue },
+      'ISSUE_REOPENED',
+      'Issue reopened',
+      publicIssueTitle({ ...currentIssue, ...issue }),
+      { note: note || null }
+    ).catch((err) => console.warn(`Reopen representative notification failed: ${err.message}`));
+
+    res.json({ issue });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/issues/:id/report ──────────────────────────────
+router.post('/:id/report', authenticate, async (req, res) => {
+  try {
+    const { reason = 'OTHER', details = '' } = req.body;
+    const { data: issue, error: issueError } = await supabase.from('issues')
+      .select('id, public_id, user_id, title, moderation_status')
+      .eq('id', req.params.id)
+      .single();
+    if (issueError || !issue) return res.status(404).json({ error: 'Issue not found' });
+
+    const { data: report, error } = await supabase.from('issue_reports')
+      .upsert({
+        issue_id: req.params.id,
+        reporter_id: req.user.id,
+        reason,
+        details,
+        status: 'OPEN',
+      }, { onConflict: 'issue_id,reporter_id' })
+      .select()
+      .single();
+    if (error) throw error;
+
+    await supabase.from('issues')
+      .update({
+        moderation_status: issue.moderation_status === 'HIDDEN' || issue.moderation_status === 'REJECTED'
+          ? issue.moderation_status
+          : 'UNDER_REVIEW',
+        updated_at: new Date(),
+      })
+      .eq('id', req.params.id);
+
+    await supabase.from('issue_history').insert({
+      issue_id: req.params.id,
+      action: 'REPORTED',
+      actor_id: req.user.id,
+      actor_role: req.user.role,
+      note: reason,
+      metadata: { details },
+    });
+
+    res.status(201).json({ report, moderation_status: 'UNDER_REVIEW' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PATCH /api/issues/:id/moderation ─────────────────────────
+router.patch('/:id/moderation', authenticate, isAdminOrMod, async (req, res) => {
+  try {
+    const { moderation_status, moderation_reason = '' } = req.body;
+    const validStatuses = ['VISIBLE', 'UNDER_REVIEW', 'HIDDEN', 'REJECTED'];
+    if (!validStatuses.includes(moderation_status)) {
+      return res.status(400).json({ error: 'Invalid moderation status' });
+    }
+
+    const { data: issue, error } = await supabase.from('issues')
+      .update({
+        moderation_status,
+        moderation_reason,
+        moderated_by: req.user.id,
+        moderated_at: new Date(),
+        updated_at: new Date(),
+      })
+      .eq('id', req.params.id)
+      .select()
+      .single();
+    if (error) throw error;
+
+    await supabase.from('issue_reports')
+      .update({
+        status: moderation_status === 'VISIBLE' ? 'DISMISSED' : 'REVIEWED',
+        reviewed_by: req.user.id,
+        reviewed_at: new Date(),
+      })
+      .eq('issue_id', req.params.id)
+      .eq('status', 'OPEN');
+
+    await supabase.from('issue_history').insert({
+      issue_id: req.params.id,
+      action: `MODERATION_${moderation_status}`,
+      actor_id: req.user.id,
+      actor_role: req.user.role,
+      note: moderation_reason || null,
+    });
+
+    res.json({ issue });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/issues/:id/duplicates ───────────────────────────
+router.get('/:id/duplicates', optionalAuth, async (req, res) => {
+  try {
+    const { data: issue, error } = await supabase
+      .from('issues')
+      .select('id, category, ward_id, city, title')
+      .eq('id', req.params.id)
+      .single();
+    if (error || !issue) return res.status(404).json({ error: 'Issue not found' });
+
+    let query = supabase.from('issues')
+      .select('id, public_id, title, category, status, location_label, ward_id, city, upvote_count, created_at, wards(name)')
+      .neq('id', issue.id)
+      .eq('category', issue.category)
+      .neq('status', 'CLOSED')
+      .order('upvote_count', { ascending: false })
+      .limit(5);
+    query = applyModerationVisibility(query, req.user);
+    if (issue.ward_id) query = query.eq('ward_id', issue.ward_id);
+    else if (issue.city) query = query.ilike('city', issue.city);
+
+    const { data, error: dupError } = await query;
+    if (dupError) throw dupError;
+    res.json({ duplicates: data || [] });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -236,6 +521,21 @@ router.post('/:id/upvote', authenticate, async (req, res) => {
       res.json({ upvoted: false });
     } else {
       await supabase.from('upvotes').insert({ issue_id: req.params.id, user_id: req.user.id });
+      const { data: issue } = await supabase
+        .from('issues')
+        .select('id, public_id, user_id, title, upvote_count')
+        .eq('id', req.params.id)
+        .maybeSingle();
+      const nextCount = (issue?.upvote_count || 0) + 1;
+      if ([5, 10, 25, 50, 100].includes(nextCount)) {
+        await notifyIssueOwner(
+          issue,
+          'UPVOTE_MILESTONE',
+          'Your issue is gaining support',
+          `${publicIssueTitle(issue)} reached ${nextCount} upvotes.`,
+          { upvote_count: nextCount }
+        );
+      }
       res.json({ upvoted: true });
     }
   } catch (err) {
@@ -266,6 +566,12 @@ router.post('/:id/comments', authenticate, async (req, res) => {
     const { body, parent_id } = req.body;
     if (!body?.trim()) return res.status(400).json({ error: 'Comment body required' });
 
+    const { data: issue } = await supabase
+      .from('issues')
+      .select('id, public_id, user_id, title')
+      .eq('id', req.params.id)
+      .maybeSingle();
+
     const isRepRole = ['CORPORATOR','MLA','MP'].includes(req.user.role);
     const comment_type = isRepRole ? 'REP_OFFICIAL' : 'CITIZEN';
 
@@ -278,6 +584,15 @@ router.post('/:id/comments', authenticate, async (req, res) => {
     }).select('*, users(name, avatar_url, role)').single();
 
     if (error) throw error;
+    if (issue?.user_id && issue.user_id !== req.user.id) {
+      await notifyIssueOwner(
+        issue,
+        isRepRole ? 'OFFICIAL_RESPONSE' : 'COMMENT_ADDED',
+        isRepRole ? 'Official response added' : 'New comment on your issue',
+        publicIssueTitle(issue),
+        { comment_id: data.id, comment_type }
+      );
+    }
     res.status(201).json({ comment: data });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -293,8 +608,13 @@ router.post('/:id/share', optionalAuth, async (req, res) => {
       user_id: req.user?.id || null,
       platform
     });
+    const { data: issue } = await supabase
+      .from('issues')
+      .select('share_count')
+      .eq('id', req.params.id)
+      .maybeSingle();
     await supabase.from('issues')
-      .update({ share_count: supabase.rpc('increment', { x: 1 }) })
+      .update({ share_count: (issue?.share_count || 0) + 1, updated_at: new Date() })
       .eq('id', req.params.id);
     res.json({ ok: true });
   } catch (err) {
@@ -306,7 +626,7 @@ router.post('/:id/share', optionalAuth, async (req, res) => {
 router.delete('/:id/comments/:cid', authenticate, async (req, res) => {
   try {
     const { data: comment } = await supabase.from('comments')
-      .select('user_id').eq('id', req.cid).single();
+      .select('user_id').eq('id', req.params.cid).single();
 
     const canDelete = req.user.role === 'ADMIN' || req.user.role === 'MODERATOR'
       || comment.user_id === req.user.id;

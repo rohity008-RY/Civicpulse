@@ -3,6 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const supabase = require('../config/supabase');
 const { authenticate, isAdmin, isAdminOrMod } = require('../middleware/auth');
+const { createNotification } = require('../services/notificationService');
 
 const IMPORT_HEADERS = [
   'state_code', 'state_name', 'city', 'zone_name', 'ward_number', 'ward_name',
@@ -455,6 +456,92 @@ router.get('/analytics/overview', isAdminOrMod, async (req, res) => {
   }
 });
 
+router.get('/moderation/issues', isAdminOrMod, async (req, res) => {
+  try {
+    const { status = 'UNDER_REVIEW', limit = 50 } = req.query;
+    let query = supabase.from('issues')
+      .select(`id, public_id, title, description, category, status, moderation_status, moderation_reason,
+               created_at, updated_at, users(name, email), wards(name, ward_number, city, state_name)`)
+      .order('updated_at', { ascending: false })
+      .limit(Number(limit) || 50);
+    if (status && status !== 'ALL') query = query.eq('moderation_status', status);
+    else query = query.in('moderation_status', ['UNDER_REVIEW', 'HIDDEN', 'REJECTED']);
+
+    const { data: issues, error } = await query;
+    if (error) throw error;
+
+    const issueIds = (issues || []).map((issue) => issue.id);
+    const { data: reports } = issueIds.length
+      ? await supabase
+        .from('issue_reports')
+        .select('id, issue_id, reason, details, status, created_at, users(name, email)')
+        .in('issue_id', issueIds)
+        .order('created_at', { ascending: false })
+      : { data: [] };
+
+    const reportsByIssue = new Map();
+    for (const report of reports || []) {
+      const list = reportsByIssue.get(report.issue_id) || [];
+      list.push(report);
+      reportsByIssue.set(report.issue_id, list);
+    }
+
+    res.json({
+      issues: (issues || []).map((issue) => ({
+        ...issue,
+        reports: reportsByIssue.get(issue.id) || [],
+      })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/moderation/issues/:id', isAdminOrMod, async (req, res) => {
+  try {
+    const { moderation_status, moderation_reason = '' } = req.body;
+    const validStatuses = ['VISIBLE', 'UNDER_REVIEW', 'HIDDEN', 'REJECTED'];
+    if (!validStatuses.includes(moderation_status)) {
+      return res.status(400).json({ error: 'Invalid moderation status' });
+    }
+
+    const { data: issue, error } = await supabase.from('issues')
+      .update({
+        moderation_status,
+        moderation_reason,
+        moderated_by: req.user.id,
+        moderated_at: new Date(),
+        updated_at: new Date(),
+      })
+      .eq('id', req.params.id)
+      .select()
+      .single();
+    if (error) throw error;
+
+    await supabase.from('issue_reports')
+      .update({
+        status: moderation_status === 'VISIBLE' ? 'DISMISSED' : 'REVIEWED',
+        reviewed_by: req.user.id,
+        reviewed_at: new Date(),
+      })
+      .eq('issue_id', req.params.id)
+      .eq('status', 'OPEN');
+
+    await supabase.from('audit_log').insert({
+      actor_id: req.user.id,
+      actor_role: req.user.role,
+      action: `ISSUE_MODERATION_${moderation_status}`,
+      target_type: 'issue',
+      target_id: issue.id,
+      metadata: { moderation_reason },
+    });
+
+    res.json({ issue });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Zone-wise performance
 router.get('/analytics/zones', isAdminOrMod, async (req, res) => {
   try {
@@ -613,6 +700,16 @@ router.put('/report-card-requests/:id', isAdmin, async (req, res) => {
       target_id: data.id,
       metadata: { note: note || null },
     });
+
+    await createNotification(
+      data.requester_id,
+      nextStatus === 'APPROVED' ? 'REPORT_CARD_APPROVED' : 'REPORT_CARD_REJECTED',
+      nextStatus === 'APPROVED' ? 'Report card approved' : 'Report card rejected',
+      nextStatus === 'APPROVED'
+        ? `Your ${data.month}/${data.year} report card is ready for PDF and CSV download.`
+        : (note || 'Admin rejected this report card request.'),
+      { report_card_request_id: data.id, month: data.month, year: data.year }
+    );
 
     res.json({ request: data });
   } catch (err) {
