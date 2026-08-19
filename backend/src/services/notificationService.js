@@ -10,6 +10,45 @@ function cleanIds(ids = []) {
   return [...new Set(ids.filter(Boolean))];
 }
 
+async function sendExpoPush(userIds, title, body, data = {}) {
+  const ids = cleanIds(userIds);
+  if (!ids.length || typeof fetch !== 'function') return;
+
+  try {
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('id, fcm_token')
+      .in('id', ids)
+      .not('fcm_token', 'is', null);
+    if (error) throw error;
+
+    const messages = (users || [])
+      .map((user) => user.fcm_token)
+      .filter((token) => /^Expo(nent)?PushToken\[/i.test(token))
+      .map((to) => ({
+        to,
+        sound: 'default',
+        title,
+        body,
+        data,
+      }));
+
+    if (!messages.length) return;
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Accept-Encoding': 'gzip, deflate',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(messages),
+    });
+    if (!response.ok) throw new Error(`Expo push returned ${response.status}`);
+  } catch (err) {
+    console.warn(`Expo push skipped: ${err.message}`);
+  }
+}
+
 async function createNotification(userId, type, title, body, data = {}) {
   if (!userId) return null;
   try {
@@ -25,6 +64,9 @@ async function createNotification(userId, type, title, body, data = {}) {
       .select()
       .single();
     if (error) throw error;
+    sendExpoPush([userId], title, body, data).catch((err) => {
+      console.warn(`Expo push failed: ${err.message}`);
+    });
     return notification;
   } catch (err) {
     console.warn(`Notification skipped (${type}): ${err.message}`);
@@ -49,6 +91,9 @@ async function createNotifications(userIds, type, title, body, data = {}) {
       .insert(rows)
       .select();
     if (error) throw error;
+    sendExpoPush(ids, title, body, data).catch((err) => {
+      console.warn(`Expo push failed: ${err.message}`);
+    });
     return notifications || [];
   } catch (err) {
     console.warn(`Notifications skipped (${type}): ${err.message}`);

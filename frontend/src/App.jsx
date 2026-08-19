@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, NavLink, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { motion, useReducedMotion } from 'framer-motion';
@@ -300,12 +300,12 @@ function AppShell({ children }) {
         </Link>
 
         <nav className="topnav" aria-label="Primary">
-          <Link to="/">{t('feed')}</Link>
-          <Link to="/raise">{t('raiseIssue')}</Link>
-          <Link to="/headlines">{t('headlines')}</Link>
-          {isAuthenticated && <Link to="/profile">{t('profile')}</Link>}
-          {['CORPORATOR', 'MLA', 'MP'].includes(user?.role) && <Link to="/rep">Rep desk</Link>}
-          {user?.role === 'ADMIN' && <Link to="/admin">{t('admin')}</Link>}
+          <NavLink to="/" end>{t('feed')}</NavLink>
+          <NavLink to="/raise">{t('raiseIssue')}</NavLink>
+          <NavLink to="/headlines">{t('headlines')}</NavLink>
+          {isAuthenticated && <NavLink to="/profile">{t('profile')}</NavLink>}
+          {['CORPORATOR', 'MLA', 'MP'].includes(user?.role) && <NavLink to="/rep">Rep desk</NavLink>}
+          {user?.role === 'ADMIN' && <NavLink to="/admin">{t('admin')}</NavLink>}
         </nav>
 
         <div className="top-actions">
@@ -544,6 +544,51 @@ function CivicPulseMapPanel() {
   );
 }
 
+function TrackIssueBox() {
+  const navigate = useNavigate();
+  const [trackingCode, setTrackingCode] = useState('');
+
+  const trackIssue = useMutation({
+    mutationFn: async () => {
+      const code = trackingCode.trim().toUpperCase();
+      if (!code) throw new Error('Enter a CivicsPulse issue ID');
+      const { data } = await api.get(`/api/issues/track/${encodeURIComponent(code)}`);
+      return data.issue;
+    },
+    onSuccess: (issue) => {
+      setTrackingCode('');
+      navigate(`/issues/${issue.id}`);
+    },
+    onError: (error) => toast.error(error.response?.data?.error || error.message || 'Issue not found'),
+  });
+
+  return (
+    <section className="track-box">
+      <div>
+        <p className="eyebrow">Track report</p>
+        <h2>Find any issue by ID</h2>
+      </div>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          trackIssue.mutate();
+        }}
+      >
+        <input
+          value={trackingCode}
+          onChange={(event) => setTrackingCode(event.target.value)}
+          placeholder="CP-MH-MUMB-A1AC61EB"
+          aria-label="CivicsPulse issue ID"
+        />
+        <button className="button primary" type="submit" disabled={trackIssue.isPending}>
+          {trackIssue.isPending ? <Loader2 size={17} className="spin" /> : <Search size={17} />}
+          Track
+        </button>
+      </form>
+    </section>
+  );
+}
+
 function DashboardPage() {
   const reduced = useReducedMotion();
   const { t, language } = useT();
@@ -582,6 +627,7 @@ function DashboardPage() {
         <PortalHero />
 
         <StatStrip />
+        <TrackIssueBox />
         <CivicPulseMapPanel />
 
         <div className="portal-grid">
@@ -2407,6 +2453,7 @@ function AdminImportPage() {
   const [importText, setImportText] = useState(SAMPLE_REP_CSV);
   const [sourceUrl, setSourceUrl] = useState('');
   const [linkForm, setLinkForm] = useState({ email: '', role: 'CORPORATOR', rep_id: '' });
+  const [adminTab, setAdminTab] = useState('imports');
   const queryClient = useQueryClient();
 
   const isAdmin = user?.role === 'ADMIN';
@@ -2558,6 +2605,27 @@ function AdminImportPage() {
           <p className="lede">{t('adminCopy')}</p>
         </div>
 
+        <div className="admin-tabs" role="tablist" aria-label="Admin sections">
+          {[
+            ['imports', 'Imports', Upload],
+            ['mapping', 'Mapping', Database],
+            ['representatives', 'Reps', ShieldCheck],
+            ['reports', 'Reports', FileText],
+            ['moderation', 'Moderation', Flag],
+          ].map(([value, label, Icon]) => (
+            <button
+              key={value}
+              type="button"
+              className={adminTab === value ? 'active' : ''}
+              onClick={() => setAdminTab(value)}
+            >
+              <Icon size={16} />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {adminTab === 'imports' && (
         <div className="admin-grid">
           <form
             className="admin-panel"
@@ -2632,7 +2700,33 @@ function AdminImportPage() {
             </div>
           </aside>
         </div>
+        )}
 
+        {adminTab === 'mapping' && (
+          <section className="admin-panel">
+            <div className="panel-title">
+              <Database size={19} />
+              <h2>{t('currentMapping')}</h2>
+            </div>
+            <div className="mapping-stats">
+              <span><strong>{wards.length}</strong><small>wards loaded</small></span>
+              <span><strong>{new Set(wards.map((ward) => ward.city)).size}</strong><small>cities</small></span>
+              <span><strong>{new Set(wards.map((ward) => ward.state_code)).size}</strong><small>states</small></span>
+            </div>
+            <div className="mapping-list expanded">
+              {wards.map((ward) => (
+                <div key={ward.id} className="mapping-row">
+                  <strong>{ward.name}</strong>
+                  <small>{[ward.ward_number, ward.city, ward.state_name].filter(Boolean).join(' · ')}</small>
+                  <span>{ward.corporators?.[0]?.name || 'No corporator mapped'}</span>
+                </div>
+              ))}
+              {!wards.length && <p className="lede">No ward data yet. Import representative rows first.</p>}
+            </div>
+          </section>
+        )}
+
+        {adminTab === 'representatives' && (
         <section className="admin-panel">
           <div className="panel-title">
             <ShieldCheck size={19} />
@@ -2686,7 +2780,9 @@ function AdminImportPage() {
             </button>
           </form>
         </section>
+        )}
 
+        {adminTab === 'reports' && (
         <section className="admin-panel">
           <div className="panel-title">
             <FileText size={19} />
@@ -2714,7 +2810,9 @@ function AdminImportPage() {
             {!pendingReports.length && <p className="lede">No report-card requests yet.</p>}
           </div>
         </section>
+        )}
 
+        {adminTab === 'moderation' && (
         <section className="admin-panel">
           <div className="panel-title">
             <Flag size={19} />
@@ -2743,7 +2841,9 @@ function AdminImportPage() {
             {!moderationQueue.isLoading && !moderationIssues.length && <p className="lede">No moderation items currently need review.</p>}
           </div>
         </section>
+        )}
 
+        {adminTab === 'imports' && (
         <section className="admin-panel">
           <div className="panel-title">
             <Clock3 size={19} />
@@ -2760,6 +2860,7 @@ function AdminImportPage() {
             {!latestImports.length && <p className="lede">No imports yet.</p>}
           </div>
         </section>
+        )}
       </section>
     </AppShell>
   );

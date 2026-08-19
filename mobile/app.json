@@ -3,7 +3,7 @@
     "name": "CivicsPulse",
     "slug": "civicpulse",
     "scheme": "civicpulse",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -32,7 +32,7 @@
         "backgroundColor": "#0A0E1A"
       },
       "package": "com.civicpulse.app",
-      "versionCode": 6,
+      "versionCode": 7,
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",

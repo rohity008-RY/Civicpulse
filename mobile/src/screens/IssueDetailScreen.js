@@ -14,6 +14,8 @@ function safeBack(navigation) {
   else navigation.navigate('Main', { screen: 'Home' });
 }
 
+const STATUS_STEPS = ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'ESCALATED_TO_MLA', 'RESOLVED'];
+
 function RepBlock({ title, rep }) {
   if (!rep) return null;
   return (
@@ -48,6 +50,8 @@ export default function IssueDetailScreen({ navigation, route }) {
   const cat = CAT_CONFIG[issue?.category] || CAT_CONFIG.OTHER;
   const status = STATUS_CONFIG[issue?.status] || STATUS_CONFIG.OPEN;
   const media = issue?.issue_media || [];
+  const timelineStatus = issue?.status === 'ESCALATED_TO_MP' ? 'ESCALATED_TO_MLA' : issue?.status;
+  const currentStep = Math.max(0, STATUS_STEPS.indexOf(timelineStatus));
   const canReopen = isAuthenticated
     && ['RESOLVED', 'CLOSED'].includes(issue?.status)
     && (issue?.user_id === user?.id || ['ADMIN', 'MODERATOR', 'CORPORATOR', 'MLA', 'MP'].includes(user?.role));
@@ -147,11 +151,29 @@ export default function IssueDetailScreen({ navigation, route }) {
             <Text style={styles.description}>{issue.description || t('noDescription')}</Text>
 
             <View style={styles.facts}>
+              {!!issue.public_id && <Text style={styles.fact}>🧾 Tracking ID {issue.public_id}</Text>}
               <Text style={styles.fact}>📍 {issue.wards?.name || issue.location_label || issue.city || 'Location pending'}</Text>
               <Text style={styles.fact}>🏙️ {[issue.city, issue.state_name].filter(Boolean).join(', ') || 'City mapping pending'}</Text>
               <Text style={styles.fact}>👍 {issue.upvote_count || 0} upvotes · 💬 {issue.comment_count || 0} comments</Text>
               <Text style={styles.fact}>⏱️ {formatDistanceToNow(new Date(issue.created_at), { addSuffix: true })}</Text>
               {issue.reopen_count > 0 && <Text style={styles.fact}>↻ Reopened {issue.reopen_count} time{issue.reopen_count === 1 ? '' : 's'}</Text>}
+            </View>
+
+            <View style={styles.progressWrap}>
+              {STATUS_STEPS.map((step, index) => {
+                const active = index === currentStep;
+                const done = index < currentStep || issue.status === 'RESOLVED';
+                return (
+                  <View key={step} style={styles.progressStep}>
+                    <View style={[styles.progressDot, done && styles.progressDone, active && styles.progressActive]}>
+                      <Text style={styles.progressDotText}>{done ? '✓' : index + 1}</Text>
+                    </View>
+                    <Text numberOfLines={2} style={[styles.progressLabel, active && { color: colors.accent2 }]}>
+                      {statusLabel(language, step)}
+                    </Text>
+                  </View>
+                );
+              })}
             </View>
           </View>
 
@@ -246,6 +268,13 @@ const styles = StyleSheet.create({
   description: { color: colors.text2, fontSize: 13, lineHeight: 20 },
   facts: { gap: 7, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
   fact: { color: colors.text2, fontSize: 12 },
+  progressWrap: { flexDirection: 'row', marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.border },
+  progressStep: { flex: 1, alignItems: 'center', gap: 5 },
+  progressDot: { width: 25, height: 25, borderRadius: 13, backgroundColor: colors.surface3, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  progressDone: { backgroundColor: colors.green, borderColor: colors.green },
+  progressActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  progressDotText: { color: '#fff', fontSize: 10, fontWeight: '900' },
+  progressLabel: { color: colors.text3, fontSize: 8, fontWeight: '800', textAlign: 'center', lineHeight: 11 },
   sectionTitle: { color: colors.text, fontSize: 15, fontWeight: '900', marginBottom: 12 },
   actionInput: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12, color: colors.text, padding: 12, fontSize: 13, marginBottom: 10 },
   primaryAction: { backgroundColor: colors.accent, borderRadius: 12, padding: 12, alignItems: 'center', marginBottom: 8 },

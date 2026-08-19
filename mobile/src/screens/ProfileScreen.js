@@ -4,6 +4,8 @@ import {
 } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
+import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import api, { postMultipart } from '../utils/api';
 import { useAuthStore } from '../store/authStore';
 import LanguagePicker from '../components/LanguagePicker';
@@ -14,7 +16,7 @@ const createUploadFormData = () => (
   Platform.OS === 'web' && typeof window !== 'undefined' ? new window.FormData() : new FormData()
 );
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ navigation }) {
   const { user, logout, updateUser } = useAuthStore();
   const { t, language } = useT();
   const queryClient = useQueryClient();
@@ -25,6 +27,7 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState(user?.avatar_url || null);
+  const [savingPush, setSavingPush] = useState(false);
 
   useEffect(() => {
     setName(user?.name || '');
@@ -37,6 +40,12 @@ export default function ProfileScreen() {
     queryKey: ['locations-profile'],
     queryFn: () => api.get('/api/reps/locations', { params: { limit: 1000 } }).then((r) => r.data),
     staleTime: 10 * 60 * 1000,
+  });
+
+  const myIssues = useQuery({
+    queryKey: ['profile-my-issues', user?.id],
+    queryFn: () => api.get('/api/feed/home', { params: { scope: 'mine', limit: 80 } }).then((r) => r.data),
+    enabled: Boolean(user?.id),
   });
 
   const wards = data?.wards || [];
@@ -144,6 +153,35 @@ export default function ProfileScreen() {
     ]);
   };
 
+  const enableNotifications = async () => {
+    if (Platform.OS === 'web') {
+      Alert.alert('Notifications', 'Install the Android app to enable mobile notifications.');
+      return;
+    }
+    setSavingPush(true);
+    try {
+      const permission = await Notifications.requestPermissionsAsync();
+      if (permission.status !== 'granted') {
+        Alert.alert('Permission needed', 'Allow notifications to receive issue and report-card updates.');
+        return;
+      }
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId || Constants.easConfig?.projectId;
+      const token = projectId
+        ? await Notifications.getExpoPushTokenAsync({ projectId })
+        : await Notifications.getExpoPushTokenAsync();
+      await api.put('/api/auth/fcm-token', { fcm_token: token.data });
+      Alert.alert('Notifications enabled', 'CivicsPulse can now send app updates for your account.');
+    } catch (err) {
+      Alert.alert('Notifications unavailable', err.message || 'Push setup needs final app-store notification credentials.');
+    } finally {
+      setSavingPush(false);
+    }
+  };
+
+  const issueList = myIssues.data?.issues || [];
+  const resolvedCount = issueList.filter((issue) => issue.status === 'RESOLVED').length;
+  const escalatedCount = issueList.filter((issue) => issue.escalated_at || String(issue.status || '').startsWith('ESCALATED')).length;
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.header}>
@@ -170,6 +208,21 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      <View style={styles.summaryRow}>
+        <View style={styles.summaryTile}>
+          <Text style={styles.summaryValue}>{user?.role || 'CITIZEN'}</Text>
+          <Text style={styles.summaryLabel}>Role</Text>
+        </View>
+        <View style={styles.summaryTile}>
+          <Text style={styles.summaryValue}>{issueList.length}</Text>
+          <Text style={styles.summaryLabel}>My issues</Text>
+        </View>
+        <View style={styles.summaryTile}>
+          <Text style={styles.summaryValue}>{resolvedCount}/{escalatedCount}</Text>
+          <Text style={styles.summaryLabel}>Resolved / Esc.</Text>
+        </View>
+      </View>
+
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>{t('profile')}</Text>
         <LanguagePicker onChange={saveLanguagePreference} />
@@ -177,6 +230,14 @@ export default function ProfileScreen() {
         <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Your name" placeholderTextColor={colors.text3} />
         <Text style={styles.label}>{t('phone')}</Text>
         <TextInput style={styles.input} value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="Optional phone number" placeholderTextColor={colors.text3} />
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Notifications</Text>
+        <Text style={styles.helper}>Get alerts when representatives update your issue, add an official response, or approve report cards.</Text>
+        <TouchableOpacity style={styles.notifyButton} onPress={enableNotifications} disabled={savingPush}>
+          <Text style={styles.notifyText}>{savingPush ? 'Enabling...' : 'Enable mobile alerts'}</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.card}>
@@ -222,6 +283,10 @@ export default function ProfileScreen() {
         <Text style={styles.logoutText}>{t('signOut')}</Text>
       </TouchableOpacity>
 
+      <TouchableOpacity style={styles.linkButton} onPress={() => navigation?.navigate('Home')}>
+        <Text style={styles.linkButtonText}>Back to feed</Text>
+      </TouchableOpacity>
+
     </ScrollView>
   );
 }
@@ -237,6 +302,10 @@ const styles = StyleSheet.create({
   avatarActionText: { color: colors.accent2, fontSize: 12, fontWeight: '800' },
   title: { color: colors.text, fontSize: 22, fontWeight: '900' },
   subtitle: { color: colors.text3, fontSize: 12, marginTop: 3 },
+  summaryRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  summaryTile: { flex: 1, minHeight: 66, borderRadius: 14, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.border, padding: 10, justifyContent: 'center' },
+  summaryValue: { color: colors.text, fontSize: 14, fontWeight: '900' },
+  summaryLabel: { color: colors.text3, fontSize: 9, marginTop: 4, fontWeight: '800' },
   card: { backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.border, borderRadius: 16, padding: 14, marginBottom: 12 },
   sectionTitle: { color: colors.text, fontSize: 15, fontWeight: '900', marginBottom: 8 },
   helper: { color: colors.text3, fontSize: 12, lineHeight: 18, marginBottom: 10 },
@@ -250,8 +319,12 @@ const styles = StyleSheet.create({
   wardChipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   wardChipTitle: { color: colors.text, fontSize: 12, fontWeight: '800' },
   wardChipMeta: { color: colors.text3, fontSize: 10, marginTop: 2 },
+  notifyButton: { backgroundColor: 'rgba(96,165,250,0.14)', borderWidth: 1, borderColor: 'rgba(96,165,250,0.28)', borderRadius: 12, padding: 13, alignItems: 'center' },
+  notifyText: { color: colors.accent2, fontSize: 13, fontWeight: '900' },
   saveButton: { backgroundColor: colors.accent, borderRadius: 14, padding: 16, alignItems: 'center', marginBottom: 10 },
   saveText: { color: '#fff', fontSize: 15, fontWeight: '900' },
   logoutButton: { backgroundColor: 'rgba(239,68,68,0.12)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.25)', borderRadius: 14, padding: 15, alignItems: 'center' },
   logoutText: { color: colors.red2, fontSize: 14, fontWeight: '800' },
+  linkButton: { padding: 14, alignItems: 'center' },
+  linkButtonText: { color: colors.text2, fontSize: 13, fontWeight: '800' },
 });
