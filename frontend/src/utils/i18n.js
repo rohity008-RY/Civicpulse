@@ -3,6 +3,10 @@ import { LANGUAGES, useLanguageStore } from '../store/languageStore';
 const en = {
   feed: 'Feed',
   raiseIssue: 'Raise issue',
+  headlines: 'Headlines',
+  civicHeadlines: 'Civic headlines',
+  headlinesTitle: 'What your city is talking about',
+  headlinesCopy: 'Scan trending, escalated, resolved, and newest civic reports from one readable news-style board.',
   profile: 'Profile',
   admin: 'Admin',
   signIn: 'Sign in',

@@ -30,6 +30,7 @@ import {
   MapPin,
   Mic,
   Megaphone,
+  Newspaper,
   Plus,
   RotateCcw,
   Search,
@@ -301,6 +302,7 @@ function AppShell({ children }) {
         <nav className="topnav" aria-label="Primary">
           <Link to="/">{t('feed')}</Link>
           <Link to="/raise">{t('raiseIssue')}</Link>
+          <Link to="/headlines">{t('headlines')}</Link>
           {isAuthenticated && <Link to="/profile">{t('profile')}</Link>}
           {['CORPORATOR', 'MLA', 'MP'].includes(user?.role) && <Link to="/rep">Rep desk</Link>}
           {user?.role === 'ADMIN' && <Link to="/admin">{t('admin')}</Link>}
@@ -660,6 +662,184 @@ function DashboardPage() {
             <EmptyState />
           )}
         </motion.section>
+      </section>
+    </AppShell>
+  );
+}
+
+function HeadlineCard({ issue, kind = 'latest' }) {
+  const reduced = useReducedMotion();
+  const { language } = useT();
+  const created = issue.created_at ? formatDistanceToNow(new Date(issue.created_at), { addSuffix: true }) : '';
+  const label = kind === 'trending'
+    ? 'Trending'
+    : kind === 'escalated'
+      ? 'Escalated'
+      : issue.status === 'RESOLVED'
+        ? 'Resolved'
+        : 'Latest';
+
+  return (
+    <motion.article
+      className={`headline-card ${kind}`}
+      variants={fadeUp}
+      whileHover={reduced ? undefined : { y: -4, transition: { duration: 0.16 } }}
+    >
+      <div className="headline-topline">
+        <span>{label}</span>
+        {issue.public_id && <small>{issue.public_id}</small>}
+      </div>
+      <h2>{issue.title}</h2>
+      <p>{issue.description || 'No description added yet.'}</p>
+      <div className="headline-meta">
+        <span><MapPin size={15} /> {issue.wards?.name || issue.location_label || issue.city || 'Mumbai'}</span>
+        <span>{categoryLabel(language, issue.category)}</span>
+        <span>{statusLabel(language, issue.status)}</span>
+      </div>
+      <div className="headline-footer">
+        <span><ThumbsUp size={15} /> {issue.upvote_count || 0}</span>
+        <span><Clock3 size={15} /> {created}</span>
+        <Link className="text-button" to={`/issues/${issue.id}`}>
+          <Eye size={16} />
+          Read
+        </Link>
+      </div>
+    </motion.article>
+  );
+}
+
+function HeadlinesPage() {
+  const reduced = useReducedMotion();
+  const { t, language } = useT();
+  const [scope, setScope] = useState('all');
+
+  const latest = useQuery({
+    queryKey: ['headlines-latest', language],
+    queryFn: () => api.get('/api/feed/home', { params: { sort: 'newest', limit: 18 } }).then((r) => r.data),
+  });
+  const trending = useQuery({
+    queryKey: ['headlines-trending', language],
+    queryFn: () => api.get('/api/feed/home', { params: { sort: 'trending', limit: 8 } }).then((r) => r.data),
+  });
+  const escalated = useQuery({
+    queryKey: ['headlines-escalated', language],
+    queryFn: () => api.get('/api/feed/escalated', { params: { limit: 8, sort: 'newest' } }).then((r) => r.data),
+  });
+  const digest = useQuery({
+    queryKey: ['headlines-digest'],
+    queryFn: () => api.get('/api/feed/digest').then((r) => r.data),
+  });
+
+  const headlineBuckets = useMemo(() => {
+    const latestIssues = latest.data?.issues || [];
+    const trendingIssues = trending.data?.issues || [];
+    const escalatedIssues = escalated.data?.issues || [];
+    const seen = new Set();
+    const addKind = (items, kind) => items
+      .filter((issue) => {
+        if (seen.has(issue.id)) return false;
+        seen.add(issue.id);
+        return true;
+      })
+      .map((issue) => ({ issue, kind }));
+
+    return [
+      ...addKind(trendingIssues, 'trending'),
+      ...addKind(escalatedIssues, 'escalated'),
+      ...addKind(latestIssues, 'latest'),
+    ];
+  }, [latest.data, trending.data, escalated.data]);
+
+  const visibleHeadlines = headlineBuckets.filter(({ kind, issue }) => {
+    if (scope === 'all') return true;
+    if (scope === 'trending') return kind === 'trending';
+    if (scope === 'escalated') return kind === 'escalated' || Boolean(issue.escalated_at);
+    if (scope === 'resolved') return issue.status === 'RESOLVED';
+    return true;
+  }).slice(0, 18);
+
+  const isLoading = latest.isLoading || trending.isLoading || escalated.isLoading;
+  const hotspots = digest.data?.ward_hotspots || [];
+  const totals = digest.data?.totals || {};
+
+  return (
+    <AppShell>
+      <section className="headlines-layout">
+        <div className="headlines-hero">
+          <div>
+            <p className="eyebrow">{t('civicHeadlines')}</p>
+            <h1>{t('headlinesTitle')}</h1>
+            <p className="lede">{t('headlinesCopy')}</p>
+          </div>
+          <div className="headline-summary">
+            <Newspaper size={24} />
+            <strong>{totals.issues || 0}</strong>
+            <span>reports in the 30-day civic pulse</span>
+          </div>
+        </div>
+
+        <div className="headline-tabs" role="tablist" aria-label="Headline filters">
+          {[
+            ['all', 'All headlines'],
+            ['trending', 'Trending'],
+            ['escalated', 'Escalated'],
+            ['resolved', 'Resolved'],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className={scope === value ? 'active' : ''}
+              onClick={() => setScope(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="headlines-grid">
+          <motion.section
+            className="headline-list"
+            variants={stagger}
+            initial={reduced ? false : 'hidden'}
+            animate={reduced ? undefined : 'visible'}
+          >
+            {isLoading ? (
+              Array.from({ length: 6 }).map((_, index) => <div className="headline-card loading-card" key={index} />)
+            ) : visibleHeadlines.length ? (
+              visibleHeadlines.map(({ issue, kind }) => <HeadlineCard key={issue.id} issue={issue} kind={kind} />)
+            ) : (
+              <EmptyState />
+            )}
+          </motion.section>
+
+          <aside className="headline-side">
+            <section className="headline-side-panel">
+              <div className="panel-title">
+                <Flame size={19} />
+                <h2>Hot wards</h2>
+              </div>
+              {hotspots.slice(0, 8).map((item) => (
+                <div className="headline-hotspot" key={item.ward}>
+                  <strong>{item.ward}</strong>
+                  <span>{item.total} reports · {item.resolved} resolved · {item.upvotes} upvotes</span>
+                </div>
+              ))}
+              {!hotspots.length && <p className="lede">Hotspots will appear when new reports are raised this month.</p>}
+            </section>
+
+            <section className="headline-side-panel">
+              <div className="panel-title">
+                <BarChart3 size={19} />
+                <h2>Pulse snapshot</h2>
+              </div>
+              <div className="headline-metrics">
+                <span><strong>{totals.resolved || 0}</strong><small>Resolved</small></span>
+                <span><strong>{totals.escalated || 0}</strong><small>Escalated</small></span>
+                <span><strong>{totals.upvotes || 0}</strong><small>Upvotes</small></span>
+              </div>
+            </section>
+          </aside>
+        </div>
       </section>
     </AppShell>
   );
@@ -2590,6 +2770,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<DashboardPage />} />
       <Route path="/raise" element={<RaiseIssuePage />} />
+      <Route path="/headlines" element={<HeadlinesPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/profile" element={<ProfileSettingsPage />} />

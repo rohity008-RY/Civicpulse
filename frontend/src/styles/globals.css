@@ -311,7 +311,8 @@ select:focus {
 .raise-layout,
 .detail-page,
 .admin-layout,
-.rep-layout {
+.rep-layout,
+.headlines-layout {
   width: min(1180px, calc(100% - 32px));
   margin: 0 auto;
   padding: 34px 0 56px;
@@ -771,6 +772,235 @@ h1 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+}
+
+.headlines-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 18px;
+  align-items: stretch;
+  margin-bottom: 16px;
+}
+
+.headlines-hero > div,
+.headline-summary,
+.headline-side-panel,
+.headline-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.headlines-hero > div:first-child {
+  padding: 28px;
+}
+
+.headline-summary {
+  display: grid;
+  align-content: center;
+  gap: 7px;
+  padding: 22px;
+}
+
+.headline-summary svg {
+  color: var(--blue);
+}
+
+.headline-summary strong {
+  font-family: var(--font-head);
+  font-size: 38px;
+  line-height: 1;
+}
+
+.headline-summary span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.headline-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin-bottom: 16px;
+}
+
+.headline-tabs button {
+  min-height: 40px;
+  flex: 0 0 auto;
+  padding: 8px 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  background: #fff;
+  font-weight: 900;
+}
+
+.headline-tabs button.active {
+  color: #fff;
+  border-color: var(--blue);
+  background: var(--blue);
+}
+
+.headlines-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 16px;
+  align-items: start;
+}
+
+.headline-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.headline-card {
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  padding: 18px;
+}
+
+.headline-card.trending {
+  border-color: #f3bf8f;
+}
+
+.headline-card.escalated {
+  border-color: #f6b8b8;
+}
+
+.headline-topline,
+.headline-meta,
+.headline-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.headline-topline {
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.headline-topline span,
+.headline-topline small {
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.headline-topline span {
+  color: var(--blue);
+  background: var(--blue-2);
+}
+
+.headline-topline small {
+  color: var(--amber);
+  background: var(--amber-2);
+}
+
+.headline-card h2 {
+  margin-bottom: 8px;
+  font-size: 21px;
+  line-height: 1.25;
+}
+
+.headline-card p {
+  display: -webkit-box;
+  min-height: 66px;
+  margin-bottom: 14px;
+  color: var(--muted);
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.headline-meta {
+  margin-top: auto;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.headline-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.headline-footer {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.headline-footer > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.headline-footer .text-button {
+  margin-left: auto;
+}
+
+.headline-side {
+  position: sticky;
+  top: 92px;
+  display: grid;
+  gap: 14px;
+}
+
+.headline-side-panel {
+  padding: 18px;
+}
+
+.headline-hotspot {
+  display: grid;
+  gap: 3px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.headline-hotspot strong {
+  color: var(--ink);
+}
+
+.headline-hotspot span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.headline-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.headline-metrics span {
+  display: grid;
+  gap: 2px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+
+.headline-metrics strong {
+  font-family: var(--font-head);
+  font-size: 22px;
+}
+
+.headline-metrics small {
+  color: var(--muted);
+  font-weight: 800;
 }
 
 .issue-card,
@@ -1797,6 +2027,8 @@ legend {
   .portal-hero,
   .portal-grid,
   .pulse-map-grid,
+  .headlines-hero,
+  .headlines-grid,
   .admin-grid,
   .rep-grid-layout,
   .admin-mini-form,
@@ -1811,8 +2043,13 @@ legend {
   }
 
   .stats-grid,
-  .issue-grid {
+  .issue-grid,
+  .headline-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .headline-side {
+    position: static;
   }
 
   .feed-toolbar,
@@ -1875,6 +2112,7 @@ legend {
   .detail-page,
   .admin-layout,
   .rep-layout,
+  .headlines-layout,
   .profile-layout {
     width: min(100% - 24px, 1180px);
     padding-top: 22px;
@@ -1885,6 +2123,8 @@ legend {
   .portal-hero,
   .portal-grid,
   .pulse-map-grid,
+  .headlines-hero,
+  .headlines-grid,
   .admin-grid,
   .admin-mini-form,
   .rep-grid-layout,
@@ -1893,7 +2133,9 @@ legend {
   .detail-grid,
   .coordinate-row,
   .location-row,
-  .rep-grid {
+  .rep-grid,
+  .headline-list,
+  .headline-metrics {
     grid-template-columns: 1fr;
   }
 
