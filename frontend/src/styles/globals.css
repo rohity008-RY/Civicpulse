@@ -1165,6 +1165,361 @@ h1 {
   color: var(--muted);
 }
 
+.consumer-auth-page {
+  width: min(1220px, calc(100% - 32px));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  gap: 24px;
+  align-items: start;
+  margin: 0 auto;
+  padding: 28px 0 58px;
+}
+
+.consumer-auth-story {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.consumer-auth-head {
+  min-height: 220px;
+  display: grid;
+  align-content: center;
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.10), rgba(15, 138, 95, 0.10)),
+    linear-gradient(90deg, rgba(37, 99, 235, 0.09) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(15, 138, 95, 0.08) 1px, transparent 1px),
+    #fff;
+  background-size: auto, 40px 40px, 40px 40px, auto;
+  box-shadow: var(--shadow);
+}
+
+.consumer-auth-head h1 {
+  max-width: 760px;
+}
+
+.consumer-auth-feature-grid,
+.consumer-auth-utility-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.86fr);
+  gap: 14px;
+}
+
+.awareness-carousel,
+.login-visual,
+.public-tracker,
+.ward-detect-card,
+.login-puzzle,
+.auth-welcome-card,
+.voice-entry-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.awareness-carousel {
+  min-height: 304px;
+  display: grid;
+  align-content: space-between;
+  gap: 18px;
+  padding: 20px;
+}
+
+.awareness-topline,
+.awareness-dots,
+.voice-entry-card,
+.ward-detect-card,
+.auth-welcome-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.awareness-topline {
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.awareness-topline span,
+.awareness-topline small {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.awareness-category {
+  display: inline-flex;
+  width: max-content;
+  margin-bottom: 12px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: var(--amber);
+  background: var(--amber-2);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.awareness-carousel h2,
+.public-tracker h2,
+.ward-detect-card h2,
+.login-puzzle h2 {
+  margin-bottom: 8px;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.awareness-carousel p,
+.public-tracker p,
+.ward-detect-card p,
+.login-puzzle p,
+.voice-entry-card p,
+.auth-welcome-card span,
+.auth-tip-grid span {
+  color: var(--muted);
+}
+
+.awareness-dots button {
+  width: 32px;
+  height: 5px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.awareness-dots button.active {
+  background: var(--blue);
+}
+
+.login-visual {
+  position: relative;
+  min-height: 304px;
+  overflow: hidden;
+  margin: 0;
+}
+
+.login-visual img {
+  width: 100%;
+  height: 100%;
+  min-height: 304px;
+  object-fit: cover;
+  display: block;
+}
+
+.login-visual::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(12, 20, 36, 0.04), rgba(12, 20, 36, 0.72));
+}
+
+.login-visual figcaption {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
+  z-index: 1;
+  display: grid;
+  gap: 5px;
+  color: #fff;
+}
+
+.login-visual figcaption span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.82);
+  font-weight: 800;
+}
+
+.login-impact-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.login-impact-tile {
+  min-height: 94px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.login-impact-tile svg {
+  color: var(--blue);
+}
+
+.login-impact-tile strong {
+  font-family: var(--font-head);
+  font-size: 24px;
+}
+
+.login-impact-tile span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.public-tracker,
+.ward-detect-card,
+.login-puzzle {
+  padding: 18px;
+}
+
+.public-tracker.compact {
+  display: grid;
+  gap: 14px;
+}
+
+.public-tracker form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.ward-detect-card {
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.ward-detect-card > div {
+  min-width: 0;
+}
+
+.login-puzzle {
+  display: grid;
+  gap: 12px;
+}
+
+.puzzle-header.compact {
+  margin-bottom: 0;
+}
+
+.login-puzzle-options {
+  display: grid;
+  gap: 8px;
+}
+
+.login-puzzle-options button {
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  background: #fff;
+  text-align: left;
+  font-weight: 900;
+}
+
+.login-puzzle-options button.picked {
+  color: var(--blue);
+  border-color: #a9c3ff;
+  background: var(--blue-2);
+}
+
+.login-puzzle-options button.right {
+  color: var(--green);
+  border-color: #9cdec6;
+  background: var(--green-2);
+}
+
+.auth-tip-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.auth-tip-grid article {
+  min-height: 136px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.auth-tip-grid svg {
+  color: var(--blue);
+}
+
+.auth-tip-grid strong {
+  font-family: var(--font-head);
+}
+
+.consumer-auth-aside {
+  position: sticky;
+  top: 94px;
+  display: grid;
+  gap: 14px;
+}
+
+.auth-welcome-card {
+  padding: 16px;
+}
+
+.auth-welcome-card img {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.18);
+}
+
+.auth-welcome-card h2 {
+  margin: 0 0 4px;
+  font-size: 22px;
+}
+
+.auth-social-start {
+  display: grid;
+  gap: 10px;
+}
+
+.google-button-wrap.prominent {
+  min-height: 44px;
+}
+
+.voice-entry-card {
+  padding: 14px;
+}
+
+.voice-entry-card > span {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--blue);
+  background: var(--blue-2);
+}
+
+.voice-entry-card div {
+  min-width: 0;
+}
+
+.voice-entry-card strong {
+  display: block;
+  font-family: var(--font-head);
+}
+
+.voice-entry-card p {
+  margin: 3px 0 0;
+  font-size: 13px;
+}
+
 .auth-page {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 420px;
@@ -1709,6 +2064,14 @@ legend {
   align-items: end;
 }
 
+.admin-mini-form.awareness-form {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.wide-field {
+  grid-column: 1 / -1;
+}
+
 .admin-mini-form label,
 .report-form label {
   display: grid;
@@ -1727,6 +2090,21 @@ legend {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
+}
+
+.awareness-list {
+  margin-top: 16px;
+}
+
+.awareness-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.awareness-row strong,
+.awareness-row small,
+.awareness-row span {
+  overflow-wrap: anywhere;
 }
 
 .rep-row h3 {
@@ -2088,6 +2466,9 @@ legend {
   .portal-grid,
   .pulse-map-grid,
   .track-box,
+  .consumer-auth-page,
+  .consumer-auth-feature-grid,
+  .consumer-auth-utility-grid,
   .headlines-hero,
   .headlines-grid,
   .admin-grid,
@@ -2110,6 +2491,10 @@ legend {
   }
 
   .headline-side {
+    position: static;
+  }
+
+  .consumer-auth-aside {
     position: static;
   }
 
@@ -2186,6 +2571,12 @@ legend {
   .pulse-map-grid,
   .track-box,
   .track-box form,
+  .consumer-auth-page,
+  .consumer-auth-feature-grid,
+  .consumer-auth-utility-grid,
+  .login-impact-grid,
+  .auth-tip-grid,
+  .public-tracker form,
   .headlines-hero,
   .headlines-grid,
   .admin-grid,
@@ -2215,6 +2606,23 @@ legend {
   .hero-image-card,
   .hero-image-card img {
     min-height: 260px;
+  }
+
+  .consumer-auth-head {
+    padding: 20px;
+  }
+
+  .login-visual,
+  .login-visual img,
+  .awareness-carousel {
+    min-height: 260px;
+  }
+
+  .ward-detect-card,
+  .voice-entry-card,
+  .auth-welcome-card {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .hero-image-card figcaption {

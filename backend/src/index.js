@@ -14,6 +14,7 @@ const adminRoutes     = require('./routes/admin');
 const voiceRoutes     = require('./routes/voice');
 const notifRoutes     = require('./routes/notifications');
 const analyticsRoutes = require('./routes/analytics');
+const awarenessRoutes = require('./routes/awareness');
 const representativeDashboardRoutes = require('./routes/representativeDashboard');
 
 const { startEscalationJob } = require('./services/escalationJob');
@@ -56,6 +57,7 @@ app.use('/api/rep',         representativeDashboardRoutes);
 app.use('/api/voice',       voiceRoutes);
 app.use('/api/notifications', notifRoutes);
 app.use('/api/analytics',   analyticsRoutes);
+app.use('/api/awareness',   awarenessRoutes);
 
 // ─── Error Handler ───────────────────────────────────────────
 app.use((err, req, res, next) => {

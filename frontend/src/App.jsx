@@ -156,6 +156,42 @@ const DAILY_PUZZLES = [
   },
 ];
 
+const FALLBACK_AWARENESS_ITEMS = [
+  {
+    id: 'fallback-monsoon',
+    title: 'Monsoon watch: report waterlogging early',
+    summary: 'Add a clear photo, road name, and nearest landmark so drainage teams can identify repeat flooding points quickly.',
+    category: 'ALERT',
+    city: 'Mumbai',
+    ward_label: 'All wards',
+    action_label: 'Raise water issue',
+  },
+  {
+    id: 'fallback-pothole',
+    title: 'Better pothole reports get faster routing',
+    summary: 'Stand safely, capture the road edge and landmark, and choose the pothole category so the issue reaches the right queue.',
+    category: 'GUIDE',
+    city: 'Mumbai',
+    ward_label: 'Roads',
+    action_label: 'Learn report tips',
+  },
+  {
+    id: 'fallback-garbage',
+    title: 'Repeat garbage dumping needs pattern details',
+    summary: 'Mention timing, nearby shop/building, and whether cleanup has already happened so ward officers can spot repeat dumping.',
+    category: 'AWARENESS',
+    city: 'Mumbai',
+    ward_label: 'Sanitation',
+    action_label: 'Report garbage',
+  },
+];
+
+const AUTH_TIPS = [
+  ['Photo evidence', 'Wide photo plus close-up helps teams verify faster.', Camera],
+  ['Right category', 'Pothole, garbage, water, safety, tree, or streetlight routes the work.', ListFilter],
+  ['Representative mapping', 'Ward and zone data connects reports to Corporator and MLA dashboards.', ShieldCheck],
+];
+
 const fadeUp = {
   hidden: { opacity: 0, y: 18 },
   visible: { opacity: 1, y: 0 },
@@ -585,6 +621,258 @@ function TrackIssueBox() {
           Track
         </button>
       </form>
+    </section>
+  );
+}
+
+function PublicIssueTracker({ compact = false }) {
+  const navigate = useNavigate();
+  const [trackingCode, setTrackingCode] = useState('');
+  const tracker = useMutation({
+    mutationFn: async () => {
+      const code = trackingCode.trim().toUpperCase();
+      if (!code) throw new Error('Enter a CivicsPulse issue ID');
+      const { data } = await api.get(`/api/issues/track/${encodeURIComponent(code)}`);
+      return data.issue;
+    },
+    onSuccess: (issue) => {
+      setTrackingCode('');
+      navigate(`/issues/${issue.id}`);
+    },
+    onError: (error) => toast.error(error.response?.data?.error || error.message || 'Issue not found'),
+  });
+
+  return (
+    <section className={`public-tracker ${compact ? 'compact' : ''}`}>
+      <div>
+        <p className="eyebrow">Public tracking</p>
+        <h2>Track any report without login</h2>
+        <p>Use your public CivicsPulse ID to see status, representative mapping, and timeline.</p>
+      </div>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          tracker.mutate();
+        }}
+      >
+        <input
+          value={trackingCode}
+          onChange={(event) => setTrackingCode(event.target.value)}
+          placeholder="CP-MH-MUMB-A1AC61EB"
+          aria-label="CivicsPulse public issue ID"
+        />
+        <button className="button primary" type="submit" disabled={tracker.isPending}>
+          {tracker.isPending ? <Loader2 size={17} className="spin" /> : <Search size={17} />}
+          Track
+        </button>
+      </form>
+    </section>
+  );
+}
+
+function LoginImpactStats() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['login-impact-stats'],
+    queryFn: () => Promise.all([
+      api.get('/api/feed/stats').then((r) => r.data),
+      api.get('/api/feed/digest').then((r) => r.data).catch(() => null),
+    ]).then(([stats, digest]) => ({ stats, digest })),
+  });
+
+  const stats = data?.stats || {};
+  const digest = data?.digest || {};
+  const items = [
+    ['Reports raised', stats.total_issues ?? 0, BarChart3],
+    ['Resolved', stats.resolved_issues ?? 0, CheckCircle2],
+    ['Active wards', digest.ward_hotspots?.length ?? 0, Map],
+    ['Representatives', stats.active_reps ?? 0, Megaphone],
+  ];
+
+  return (
+    <section className="login-impact-grid" aria-label="CivicsPulse impact">
+      {items.map(([label, value, Icon]) => (
+        <div className="login-impact-tile" key={label}>
+          <Icon size={17} />
+          <strong>{isLoading ? '...' : value}</strong>
+          <span>{label}</span>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function AuthAwarenessCarousel() {
+  const reduced = useReducedMotion();
+  const [active, setActive] = useState(0);
+  const { data } = useQuery({
+    queryKey: ['login-awareness-items'],
+    queryFn: () => api.get('/api/awareness', { params: { limit: 8 } }).then((r) => r.data),
+    staleTime: 5 * 60 * 1000,
+  });
+  const items = data?.items?.length ? data.items : FALLBACK_AWARENESS_ITEMS;
+  const item = items[active % items.length];
+
+  useEffect(() => {
+    if (reduced || items.length <= 1) return undefined;
+    const timer = window.setInterval(() => {
+      setActive((index) => (index + 1) % items.length);
+    }, 5200);
+    return () => window.clearInterval(timer);
+  }, [items.length, reduced]);
+
+  return (
+    <section className="awareness-carousel">
+      <div className="awareness-topline">
+        <span><Newspaper size={16} /> Awareness news</span>
+        <small>{item.city || 'Mumbai'} · {item.ward_label || 'All wards'}</small>
+      </div>
+      <motion.div
+        key={item.id || item.slug}
+        initial={reduced ? false : { opacity: 0, y: 10 }}
+        animate={reduced ? undefined : { opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <span className="awareness-category">{item.category || 'AWARENESS'}</span>
+        <h2>{item.title}</h2>
+        <p>{item.summary}</p>
+      </motion.div>
+      <div className="awareness-dots" aria-label="Awareness carousel controls">
+        {items.map((entry, index) => (
+          <button
+            key={entry.id || entry.slug || index}
+            type="button"
+            className={index === active % items.length ? 'active' : ''}
+            onClick={() => setActive(index)}
+            aria-label={`Show awareness item ${index + 1}`}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function WardDetectPreview() {
+  const [locating, setLocating] = useState(false);
+  const [ward, setWard] = useState(null);
+
+  const detectWard = () => {
+    if (!navigator.geolocation) {
+      toast.error('Location is not available in this browser');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { data } = await api.get('/api/reps/ward-lookup', {
+            params: { lat: position.coords.latitude, lng: position.coords.longitude },
+          });
+          setWard(data.ward || null);
+          if (data.ward) toast.success(`Ward detected: ${data.ward.name || data.ward.ward_number}`);
+        } catch (error) {
+          toast.error(error.response?.data?.error || 'Could not detect ward. You can still search manually while signing up.');
+        } finally {
+          setLocating(false);
+        }
+      },
+      () => {
+        setLocating(false);
+        toast.error('Location permission was not granted. Manual ward search is available.');
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
+  return (
+    <section className="ward-detect-card">
+      <div>
+        <p className="eyebrow">Ward auto-detect</p>
+        <h2>Map your issue to the right people</h2>
+        <p>{ward ? `Detected ${formatWard(ward)}.` : 'Use GPS during signup or search your ward manually.'}</p>
+      </div>
+      <button className="button secondary" type="button" onClick={detectWard} disabled={locating}>
+        {locating ? <Loader2 size={17} className="spin" /> : <LocateFixed size={17} />}
+        Detect my ward
+      </button>
+    </section>
+  );
+}
+
+function AuthMiniPuzzle() {
+  const { key, puzzle } = getDailyPuzzle();
+  const [selected, setSelected] = useState(() => {
+    const stored = window.localStorage.getItem(`${key}-login`);
+    return stored === null ? null : Number(stored);
+  });
+  const solved = selected === puzzle.answer;
+
+  const choose = (index) => {
+    setSelected(index);
+    window.localStorage.setItem(`${key}-login`, String(index));
+  };
+
+  return (
+    <section className="login-puzzle">
+      <div className="puzzle-header compact">
+        <span className="puzzle-icon"><Lightbulb size={18} /></span>
+        <div>
+          <p className="eyebrow">Daily civic puzzle</p>
+          <h2>{puzzle.title}</h2>
+        </div>
+      </div>
+      <p>{puzzle.prompt}</p>
+      <div className="login-puzzle-options">
+        {puzzle.choices.map((choice, index) => (
+          <button
+            key={choice}
+            type="button"
+            className={`${selected === index ? 'picked' : ''} ${selected !== null && index === puzzle.answer ? 'right' : ''}`}
+            onClick={() => choose(index)}
+          >
+            {choice}
+          </button>
+        ))}
+      </div>
+      {selected !== null && <small>{solved ? 'Good civic instinct.' : 'Try this tip:'} {puzzle.note}</small>}
+    </section>
+  );
+}
+
+function CivicLoginVisual() {
+  return (
+    <figure className="login-visual">
+      <img src="/civic-hero.png" alt="Mumbai citizens documenting a civic issue" />
+      <figcaption>
+        <span><MapPin size={14} /> Mumbai ward network</span>
+        <strong>Photo, voice, GPS, and public tracking in one flow</strong>
+      </figcaption>
+    </figure>
+  );
+}
+
+function AwarenessTipCards() {
+  return (
+    <section className="auth-tip-grid" aria-label="How to raise better civic reports">
+      {AUTH_TIPS.map(([title, copy, Icon]) => (
+        <article key={title}>
+          <Icon size={18} />
+          <strong>{title}</strong>
+          <span>{copy}</span>
+        </article>
+      ))}
+    </section>
+  );
+}
+
+function VoiceEntryCard() {
+  return (
+    <section className="voice-entry-card">
+      <span><Mic size={18} /></span>
+      <div>
+        <strong>Speak your issue</strong>
+        <p>Open the voice-assisted form, review AI-filled details, then sign in to submit.</p>
+      </div>
+      <Link className="button secondary" to="/raise?voice=1">Start</Link>
     </section>
   );
 }
@@ -1142,6 +1430,22 @@ function AuthPanel({ compact = false, redirectTo = '/raise' }) {
 
       <form onSubmit={submitAuth} className="auth-form">
         <LanguageSelect label />
+        {mode !== 'forgot' && (
+          <div className="auth-social-start">
+            {GOOGLE_CLIENT_ID ? (
+              <div className="google-button-wrap prominent" ref={googleButtonRef} aria-label={t('continueWithGoogle')} />
+            ) : (
+              <button type="button" className="button secondary google-fallback" disabled>
+                <Globe2 size={17} />
+                {t('googleNeedsSetup')}
+              </button>
+            )}
+            {googleAuth.isPending && (
+              <p className="inline-status"><Loader2 size={14} className="spin" /> {t('googleSigningIn')}</p>
+            )}
+            <div className="auth-divider"><span>or continue with email</span></div>
+          </div>
+        )}
         {mode === 'register' && (
           <label>
             {t('fullName')}
@@ -1255,22 +1559,7 @@ function AuthPanel({ compact = false, redirectTo = '/raise' }) {
           <button type="button" className="text-button auth-link" onClick={() => setMode('login')}>
             {t('backToSignIn')}
           </button>
-        ) : (
-          <>
-            <div className="auth-divider"><span>{t('or')}</span></div>
-            {GOOGLE_CLIENT_ID ? (
-              <div className="google-button-wrap" ref={googleButtonRef} aria-label={t('continueWithGoogle')} />
-            ) : (
-              <button type="button" className="button secondary google-fallback" disabled>
-                <Globe2 size={17} />
-                {t('googleNeedsSetup')}
-              </button>
-            )}
-            {googleAuth.isPending && (
-              <p className="inline-status"><Loader2 size={14} className="spin" /> {t('googleSigningIn')}</p>
-            )}
-          </>
-        )}
+        ) : null}
       </form>
     </section>
   );
@@ -1283,15 +1572,53 @@ function LoginPage() {
 
   return (
     <AppShell>
-      <section className="auth-page">
-        <div>
-          <p className="eyebrow">{t('authEyebrow')}</p>
-          <h1>{t('authTitle')}</h1>
-          <p className="lede">
-            {t('authCopy')}
-          </p>
-        </div>
-        <AuthPanel />
+      <section className="consumer-auth-page">
+        <motion.div
+          className="consumer-auth-story"
+          initial="hidden"
+          animate="visible"
+          variants={stagger}
+        >
+          <motion.div className="consumer-auth-head" variants={fadeUp}>
+            <p className="eyebrow">{t('authEyebrow')}</p>
+            <h1>Know your city before you raise your voice</h1>
+            <p className="lede">
+              Sign in to report issues, track public timelines, learn what evidence helps, and stay aware of ward-level civic updates.
+            </p>
+          </motion.div>
+
+          <motion.div className="consumer-auth-feature-grid" variants={fadeUp}>
+            <AuthAwarenessCarousel />
+            <CivicLoginVisual />
+          </motion.div>
+
+          <motion.div variants={fadeUp}>
+            <LoginImpactStats />
+          </motion.div>
+
+          <motion.div className="consumer-auth-utility-grid" variants={fadeUp}>
+            <PublicIssueTracker compact />
+            <WardDetectPreview />
+          </motion.div>
+
+          <motion.div className="consumer-auth-utility-grid" variants={fadeUp}>
+            <AuthMiniPuzzle />
+            <AwarenessTipCards />
+          </motion.div>
+        </motion.div>
+
+        <aside id="join" className="consumer-auth-aside">
+          <div className="auth-welcome-card">
+            <img src="/icon.png" alt="" />
+            <div>
+              <p className="eyebrow">Get started</p>
+              <h2>Join CivicsPulse</h2>
+              <span>Choose language, sign in with Google or email, and map your ward during signup.</span>
+            </div>
+          </div>
+          <AuthPanel />
+          <VoiceEntryCard />
+        </aside>
       </section>
     </AppShell>
   );
@@ -2454,6 +2781,16 @@ function AdminImportPage() {
   const [sourceUrl, setSourceUrl] = useState('');
   const [linkForm, setLinkForm] = useState({ email: '', role: 'CORPORATOR', rep_id: '' });
   const [adminTab, setAdminTab] = useState('imports');
+  const [awarenessForm, setAwarenessForm] = useState({
+    title: '',
+    summary: '',
+    category: 'AWARENESS',
+    city: 'Mumbai',
+    ward_label: 'All wards',
+    action_label: 'Raise issue',
+    action_url: '',
+    priority: 25,
+  });
   const queryClient = useQueryClient();
 
   const isAdmin = user?.role === 'ADMIN';
@@ -2491,6 +2828,12 @@ function AdminImportPage() {
   const moderationQueue = useQuery({
     queryKey: ['admin-moderation-issues'],
     queryFn: () => api.get('/api/admin/moderation/issues', { params: { status: 'ALL' } }).then((r) => r.data),
+    enabled: isAdmin,
+  });
+
+  const awarenessItems = useQuery({
+    queryKey: ['admin-awareness-items'],
+    queryFn: () => api.get('/api/awareness', { params: { include_inactive: true, limit: 40 } }).then((r) => r.data),
     enabled: isAdmin,
   });
 
@@ -2556,6 +2899,30 @@ function AdminImportPage() {
     onError: (error) => toast.error(error.response?.data?.error || 'Moderation update failed'),
   });
 
+  const createAwareness = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post('/api/awareness', awarenessForm);
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Awareness item added');
+      setAwarenessForm((state) => ({ ...state, title: '', summary: '', action_url: '' }));
+      queryClient.invalidateQueries({ queryKey: ['admin-awareness-items'] });
+      queryClient.invalidateQueries({ queryKey: ['login-awareness-items'] });
+    },
+    onError: (error) => toast.error(error.response?.data?.error || 'Awareness item failed'),
+  });
+
+  const toggleAwareness = useMutation({
+    mutationFn: (item) => api.put(`/api/awareness/${item.id}`, { is_active: !item.is_active }),
+    onSuccess: () => {
+      toast.success('Awareness item updated');
+      queryClient.invalidateQueries({ queryKey: ['admin-awareness-items'] });
+      queryClient.invalidateQueries({ queryKey: ['login-awareness-items'] });
+    },
+    onError: (error) => toast.error(error.response?.data?.error || 'Awareness update failed'),
+  });
+
   const readFile = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -2595,6 +2962,8 @@ function AdminImportPage() {
   const representativeOptions = linkForm.role === 'MLA' ? (mlas.data?.mlas || []) : (corporators.data?.corporators || []);
   const pendingReports = reportRequests.data?.requests || [];
   const moderationIssues = moderationQueue.data?.issues || [];
+  const awarenessRows = awarenessItems.data?.items || [];
+  const awarenessSource = awarenessItems.data?.source || 'database';
 
   return (
     <AppShell>
@@ -2612,6 +2981,7 @@ function AdminImportPage() {
             ['representatives', 'Reps', ShieldCheck],
             ['reports', 'Reports', FileText],
             ['moderation', 'Moderation', Flag],
+            ['awareness', 'Awareness', Newspaper],
           ].map(([value, label, Icon]) => (
             <button
               key={value}
@@ -2839,6 +3209,114 @@ function AdminImportPage() {
               </div>
             ))}
             {!moderationQueue.isLoading && !moderationIssues.length && <p className="lede">No moderation items currently need review.</p>}
+          </div>
+        </section>
+        )}
+
+        {adminTab === 'awareness' && (
+        <section className="admin-panel">
+          <div className="panel-title">
+            <Newspaper size={19} />
+            <h2>Login awareness news</h2>
+          </div>
+          <form
+            className="admin-mini-form awareness-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              createAwareness.mutate();
+            }}
+          >
+            <label>
+              Headline
+              <input
+                required
+                value={awarenessForm.title}
+                onChange={(event) => setAwarenessForm((state) => ({ ...state, title: event.target.value }))}
+                placeholder="Water cut alert for H-West"
+              />
+            </label>
+            <label>
+              Category
+              <select
+                value={awarenessForm.category}
+                onChange={(event) => setAwarenessForm((state) => ({ ...state, category: event.target.value }))}
+              >
+                <option value="AWARENESS">Awareness</option>
+                <option value="ALERT">Alert</option>
+                <option value="GUIDE">Guide</option>
+                <option value="SAFETY">Safety</option>
+                <option value="EVENT">Event</option>
+              </select>
+            </label>
+            <label>
+              City
+              <input
+                value={awarenessForm.city}
+                onChange={(event) => setAwarenessForm((state) => ({ ...state, city: event.target.value }))}
+                placeholder="Mumbai"
+              />
+            </label>
+            <label>
+              Ward / audience
+              <input
+                value={awarenessForm.ward_label}
+                onChange={(event) => setAwarenessForm((state) => ({ ...state, ward_label: event.target.value }))}
+                placeholder="All wards"
+              />
+            </label>
+            <label className="wide-field">
+              Summary
+              <textarea
+                required
+                rows={4}
+                value={awarenessForm.summary}
+                onChange={(event) => setAwarenessForm((state) => ({ ...state, summary: event.target.value }))}
+                placeholder="Explain what citizens should know and what detail helps the report."
+              />
+            </label>
+            <label>
+              Action label
+              <input
+                value={awarenessForm.action_label}
+                onChange={(event) => setAwarenessForm((state) => ({ ...state, action_label: event.target.value }))}
+                placeholder="Raise issue"
+              />
+            </label>
+            <label>
+              Priority
+              <input
+                type="number"
+                value={awarenessForm.priority}
+                onChange={(event) => setAwarenessForm((state) => ({ ...state, priority: Number(event.target.value) }))}
+              />
+            </label>
+            <button className="button primary" type="submit" disabled={createAwareness.isPending}>
+              {createAwareness.isPending ? <Loader2 size={17} className="spin" /> : <Newspaper size={17} />}
+              Add awareness item
+            </button>
+          </form>
+
+          <div className="import-history awareness-list">
+            {awarenessItems.isLoading && <div className="loading-card mapping-row" />}
+            {!awarenessItems.isLoading && awarenessRows.map((item) => (
+              <div key={item.id} className="mapping-row awareness-row">
+                <strong>{item.title}</strong>
+                <small>{item.category} · {item.city || 'All cities'} · {item.ward_label || 'All wards'} · priority {item.priority || 0}</small>
+                <span>{item.summary}</span>
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={() => toggleAwareness.mutate(item)}
+                  disabled={awarenessSource === 'fallback' || String(item.id || '').startsWith('fallback-')}
+                >
+                  {item.is_active ? 'Pause' : 'Resume'}
+                </button>
+              </div>
+            ))}
+            {awarenessSource === 'fallback' && (
+              <p className="lede">Default messages are visible because the awareness table has not been created yet.</p>
+            )}
+            {!awarenessItems.isLoading && !awarenessRows.length && <p className="lede">No awareness items yet. The login page will use safe default messages.</p>}
           </div>
         </section>
         )}

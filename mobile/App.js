@@ -82,7 +82,10 @@ function AppNavigator() {
     <NavigationContainer theme={{ colors: { background: colors.bg } }}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!isAuthenticated ? (
-          <Stack.Screen name="Login" component={LoginScreen} />
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="IssueDetail" component={IssueDetailScreen} />
+          </>
         ) : (
           <>
             <Stack.Screen name="Main"         component={TabNavigator} />
