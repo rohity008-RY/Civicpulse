@@ -2544,6 +2544,7 @@ legend {
 
   .topbar {
     padding: 12px 14px;
+    gap: 10px 12px;
   }
 
   .compact-auth-topbar {
@@ -2562,7 +2563,18 @@ legend {
   }
 
   .top-actions {
+    width: 100%;
     gap: 8px;
+  }
+
+  .top-actions .language-select {
+    flex: 1 1 118px;
+    min-width: 0;
+  }
+
+  .top-actions .language-select select {
+    min-width: 0;
+    width: 100%;
   }
 
   .compact-auth-topbar .top-actions {
@@ -2572,7 +2584,10 @@ legend {
   }
 
   .top-actions .button {
-    flex: 1;
+    flex: 0 0 auto;
+    min-height: 38px;
+    padding: 8px 10px;
+    white-space: nowrap;
   }
 
   .compact-auth-topbar .top-actions .button {
