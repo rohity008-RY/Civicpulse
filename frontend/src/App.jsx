@@ -319,14 +319,14 @@ function NotificationCenter() {
   );
 }
 
-function AppShell({ children }) {
+function AppShell({ children, compactAuth = false }) {
   const { isAuthenticated, user, logout } = useAuthStore();
   const navigate = useNavigate();
   const { t } = useT();
 
   return (
     <div className="app-shell">
-      <header className="topbar">
+      <header className={`topbar ${compactAuth ? 'compact-auth-topbar' : ''}`}>
         <Link to="/" className="brand">
           <img src="/icon.png" alt="" className="brand-mark" />
           <span>
@@ -335,18 +335,20 @@ function AppShell({ children }) {
           </span>
         </Link>
 
-        <nav className="topnav" aria-label="Primary">
-          <NavLink to="/" end>{t('feed')}</NavLink>
-          <NavLink to="/raise">{t('raiseIssue')}</NavLink>
-          <NavLink to="/headlines">{t('headlines')}</NavLink>
-          {isAuthenticated && <NavLink to="/profile">{t('profile')}</NavLink>}
-          {['CORPORATOR', 'MLA', 'MP'].includes(user?.role) && <NavLink to="/rep">Rep desk</NavLink>}
-          {user?.role === 'ADMIN' && <NavLink to="/admin">{t('admin')}</NavLink>}
-        </nav>
+        {!compactAuth && (
+          <nav className="topnav" aria-label="Primary">
+            <NavLink to="/" end>{t('feed')}</NavLink>
+            <NavLink to="/raise">{t('raiseIssue')}</NavLink>
+            <NavLink to="/headlines">{t('headlines')}</NavLink>
+            {isAuthenticated && <NavLink to="/profile">{t('profile')}</NavLink>}
+            {['CORPORATOR', 'MLA', 'MP'].includes(user?.role) && <NavLink to="/rep">Rep desk</NavLink>}
+            {user?.role === 'ADMIN' && <NavLink to="/admin">{t('admin')}</NavLink>}
+          </nav>
+        )}
 
         <div className="top-actions">
-          <LanguageSelect />
-          {isAuthenticated && <NotificationCenter />}
+          {!compactAuth && <LanguageSelect />}
+          {isAuthenticated && !compactAuth && <NotificationCenter />}
           {isAuthenticated ? (
             <>
               <Link className="user-chip" to="/profile">
@@ -361,13 +363,17 @@ function AppShell({ children }) {
                 <LogOut size={18} />
               </button>
             </>
+          ) : compactAuth ? (
+            <Link className="button secondary" to="/">Explore feed</Link>
           ) : (
             <Link className="button secondary" to="/login">{t('signIn')}</Link>
           )}
-          <Link className="button primary" to="/raise">
-            <Plus size={17} />
-            {t('raiseIssue')}
-          </Link>
+          {!compactAuth && (
+            <Link className="button primary" to="/raise">
+              <Plus size={17} />
+              {t('raiseIssue')}
+            </Link>
+          )}
         </div>
       </header>
 
@@ -1255,12 +1261,12 @@ function EmptyState() {
   );
 }
 
-function AuthPanel({ compact = false, redirectTo = '/raise' }) {
+function AuthPanel({ compact = false, redirectTo = '/raise', initialMode = 'register' }) {
   const navigate = useNavigate();
   const { login } = useAuthStore();
   const { t, language } = useT();
   const setLanguage = useLanguageStore((state) => state.setLanguage);
-  const [mode, setMode] = useState('register');
+  const [mode, setMode] = useState(initialMode);
   const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [wardSearch, setWardSearch] = useState('');
@@ -1571,7 +1577,7 @@ function LoginPage() {
   if (isAuthenticated) return <Navigate to="/raise" replace />;
 
   return (
-    <AppShell>
+    <AppShell compactAuth>
       <section className="consumer-auth-page">
         <motion.div
           className="consumer-auth-story"
@@ -1616,7 +1622,7 @@ function LoginPage() {
               <span>Choose language, sign in with Google or email, and map your ward during signup.</span>
             </div>
           </div>
-          <AuthPanel />
+          <AuthPanel initialMode="login" />
           <VoiceEntryCard />
         </aside>
       </section>
