@@ -1607,7 +1607,7 @@ function LoginPage() {
             <WardDetectPreview />
           </motion.div>
 
-          <motion.div className="consumer-auth-utility-grid" variants={fadeUp}>
+          <motion.div className="consumer-auth-utility-grid report-help-grid" variants={fadeUp}>
             <AuthMiniPuzzle />
             <AwarenessTipCards />
           </motion.div>

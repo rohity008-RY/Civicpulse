@@ -1402,6 +1402,10 @@ h1 {
   gap: 14px;
 }
 
+.report-help-grid {
+  grid-template-columns: 1fr;
+}
+
 .public-tracker form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1437,6 +1441,7 @@ h1 {
 
 .login-puzzle-options {
   display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -1447,7 +1452,7 @@ h1 {
   border-radius: 8px;
   color: var(--muted);
   background: #fff;
-  text-align: left;
+  text-align: center;
   font-weight: 900;
 }
 
@@ -1465,12 +1470,12 @@ h1 {
 
 .auth-tip-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
 .auth-tip-grid article {
-  min-height: 96px;
+  min-height: 112px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-content: center;
@@ -2712,6 +2717,15 @@ legend {
   .login-impact-tile,
   .auth-tip-grid article {
     min-height: auto;
+  }
+
+  .login-puzzle-options,
+  .auth-tip-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .login-puzzle-options button {
+    text-align: left;
   }
 
   .auth-welcome-card {
