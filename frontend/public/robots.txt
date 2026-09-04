@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /profile
+Disallow: /rep
+Disallow: /reset-password
+
+Sitemap: https://civicspulse.in/sitemap.xml

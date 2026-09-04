@@ -46,8 +46,24 @@ import {
 import toast from 'react-hot-toast';
 import api from './utils/api';
 import { useAuthStore } from './store/authStore';
-import { useLanguageStore } from './store/languageStore';
+import { normalizeLanguage, useLanguageStore } from './store/languageStore';
 import { categoryLabel, statusLabel, useT } from './utils/i18n';
+import {
+  BRAND_NAME,
+  CATEGORY_SEO_PAGES,
+  DEFAULT_IMAGE as SEO_DEFAULT_IMAGE,
+  SEO_LANGUAGES,
+  STATIC_SEO_ROUTES,
+  WARD_SEO_PAGES,
+  absoluteUrl,
+  cleanPath,
+  getAlternates,
+  getCategoryByPath,
+  getLocalizedPath,
+  getLocalizedSeoCopy,
+  getSeoPageByPath,
+  getWardBySlug,
+} from './utils/seoContent.mjs';
 
 const CATEGORIES = [
   ['POTHOLE', 'Pothole'],
@@ -73,6 +89,140 @@ const STATUS_LABELS = {
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 let googleIdentityPromise;
+
+function ensureMeta(selector, attributes) {
+  let element = document.head.querySelector(selector);
+  if (!element) {
+    element = document.createElement('meta');
+    document.head.appendChild(element);
+  }
+  Object.entries(attributes).forEach(([key, value]) => {
+    element.setAttribute(key, value);
+  });
+}
+
+function ensureLink(selector, attributes) {
+  let element = document.head.querySelector(selector);
+  if (!element) {
+    element = document.createElement('link');
+    document.head.appendChild(element);
+  }
+  Object.entries(attributes).forEach(([key, value]) => {
+    element.setAttribute(key, value);
+  });
+}
+
+function buildBreadcrumbSchema(items) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map((item, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: item.name,
+      item: absoluteUrl(item.path),
+    })),
+  };
+}
+
+function buildFaqSchema(items) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: items.map((item) => ({
+      '@type': 'Question',
+      name: item.question,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: item.answer,
+      },
+    })),
+  };
+}
+
+function buildWebPageSchema({ title, description, url, language }) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    name: title,
+    description,
+    url,
+    inLanguage: SEO_LANGUAGES.find((item) => item.code === language)?.locale || 'en-IN',
+    isPartOf: {
+      '@type': 'WebSite',
+      name: BRAND_NAME,
+      url: absoluteUrl('/'),
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: BRAND_NAME,
+      url: absoluteUrl('/'),
+      logo: absoluteUrl('/icon.png'),
+    },
+  };
+}
+
+function SEOHead({
+  title,
+  description,
+  canonicalPath = '/',
+  alternatesPath = canonicalPath,
+  keywords = [],
+  image = SEO_DEFAULT_IMAGE,
+  type = 'website',
+  noindex = false,
+  schema = [],
+}) {
+  const { language } = useT();
+  const canonicalUrl = absoluteUrl(canonicalPath);
+  const imageUrl = image.startsWith('http') ? image : absoluteUrl(image);
+  const robots = noindex ? 'noindex, nofollow' : 'index, follow';
+  const keywordText = keywords.filter(Boolean).join(', ');
+  const schemaJson = JSON.stringify([
+    buildWebPageSchema({ title, description, url: canonicalUrl, language }),
+    ...schema.filter(Boolean),
+  ]);
+
+  useEffect(() => {
+    document.documentElement.lang = language || 'en';
+    document.title = title;
+    ensureMeta('meta[name="description"]', { name: 'description', content: description });
+    ensureMeta('meta[name="robots"]', { name: 'robots', content: robots });
+    if (keywordText) ensureMeta('meta[name="keywords"]', { name: 'keywords', content: keywordText });
+    ensureMeta('meta[property="og:site_name"]', { property: 'og:site_name', content: BRAND_NAME });
+    ensureMeta('meta[property="og:type"]', { property: 'og:type', content: type });
+    ensureMeta('meta[property="og:title"]', { property: 'og:title', content: title });
+    ensureMeta('meta[property="og:description"]', { property: 'og:description', content: description });
+    ensureMeta('meta[property="og:url"]', { property: 'og:url', content: canonicalUrl });
+    ensureMeta('meta[property="og:image"]', { property: 'og:image', content: imageUrl });
+    ensureMeta('meta[name="twitter:card"]', { name: 'twitter:card', content: 'summary_large_image' });
+    ensureMeta('meta[name="twitter:title"]', { name: 'twitter:title', content: title });
+    ensureMeta('meta[name="twitter:description"]', { name: 'twitter:description', content: description });
+    ensureMeta('meta[name="twitter:image"]', { name: 'twitter:image', content: imageUrl });
+    ensureLink('link[rel="canonical"]', { rel: 'canonical', href: canonicalUrl });
+
+    document.head.querySelectorAll('link[data-civicspulse-hreflang]').forEach((element) => element.remove());
+    getAlternates(alternatesPath).forEach((alternate) => {
+      const link = document.createElement('link');
+      link.rel = 'alternate';
+      link.hreflang = alternate.hreflang;
+      link.href = alternate.href;
+      link.setAttribute('data-civicspulse-hreflang', 'true');
+      document.head.appendChild(link);
+    });
+
+    let script = document.head.querySelector('script[data-civicspulse-jsonld]');
+    if (!script) {
+      script = document.createElement('script');
+      script.type = 'application/ld+json';
+      script.setAttribute('data-civicspulse-jsonld', 'true');
+      document.head.appendChild(script);
+    }
+    script.textContent = schemaJson;
+  }, [alternatesPath, canonicalUrl, description, imageUrl, keywordText, language, robots, schemaJson, title, type]);
+
+  return null;
+}
 
 function loadGoogleIdentityScript() {
   if (window.google?.accounts?.id) return Promise.resolve(window.google);
@@ -319,6 +469,42 @@ function NotificationCenter() {
   );
 }
 
+function SeoFooter() {
+  const priorityLinks = [
+    ['Mumbai civic reporting', '/mumbai'],
+    ['Public issue tracker', '/public-issues'],
+    ['Civic news', '/civic-news'],
+    ['Daily civic puzzle', '/daily-civic-puzzle'],
+    ['Corporator list', '/corporator-list-mumbai'],
+    ['MLA list', '/mla-list-mumbai'],
+  ];
+  const categoryLinks = CATEGORY_SEO_PAGES.slice(0, 6).map((page) => [page.category, page.path]);
+  const wardLinks = WARD_SEO_PAGES.slice(0, 6).map((ward) => [ward.name, `/mumbai/wards/${ward.slug}`]);
+
+  return (
+    <footer className="seo-footer">
+      <div>
+        <strong>{BRAND_NAME}</strong>
+        <p>Mumbai civic reporting, ward issue tracking, and representative mapping for citizens.</p>
+      </div>
+      <nav aria-label="SEO discovery links">
+        <section>
+          <h2>Explore</h2>
+          {priorityLinks.map(([label, path]) => <Link key={path} to={path}>{label}</Link>)}
+        </section>
+        <section>
+          <h2>Report by category</h2>
+          {categoryLinks.map(([label, path]) => <Link key={path} to={path}>{label}</Link>)}
+        </section>
+        <section>
+          <h2>Popular wards</h2>
+          {wardLinks.map(([label, path]) => <Link key={path} to={path}>{label}</Link>)}
+        </section>
+      </nav>
+    </footer>
+  );
+}
+
 function AppShell({ children, compactAuth = false }) {
   const { isAuthenticated, user, logout } = useAuthStore();
   const navigate = useNavigate();
@@ -378,6 +564,7 @@ function AppShell({ children, compactAuth = false }) {
       </header>
 
       <main>{children}</main>
+      {!compactAuth && <SeoFooter />}
     </div>
   );
 }
@@ -887,6 +1074,7 @@ function DashboardPage() {
   const reduced = useReducedMotion();
   const { t, language } = useT();
   const { isAuthenticated } = useAuthStore();
+  const homeSeo = getSeoPageByPath('/');
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [sort, setSort] = useState('newest');
@@ -916,7 +1104,18 @@ function DashboardPage() {
   }, [data?.issues, search]);
 
   return (
-    <AppShell>
+    <>
+      <SEOHead
+        title={homeSeo.title}
+        description={homeSeo.description}
+        canonicalPath="/"
+        alternatesPath="/"
+        keywords={homeSeo.keywords}
+        schema={[
+          buildBreadcrumbSchema([{ name: BRAND_NAME, path: '/' }]),
+        ]}
+      />
+      <AppShell>
       <section className="workspace">
         <PortalHero />
 
@@ -1003,7 +1202,8 @@ function DashboardPage() {
           )}
         </motion.section>
       </section>
-    </AppShell>
+      </AppShell>
+    </>
   );
 }
 
@@ -1051,6 +1251,7 @@ function HeadlineCard({ issue, kind = 'latest' }) {
 function HeadlinesPage() {
   const reduced = useReducedMotion();
   const { t, language } = useT();
+  const headlinesSeo = getSeoPageByPath('/headlines');
   const [scope, setScope] = useState('all');
 
   const latest = useQuery({
@@ -1103,7 +1304,21 @@ function HeadlinesPage() {
   const totals = digest.data?.totals || {};
 
   return (
-    <AppShell>
+    <>
+      <SEOHead
+        title={headlinesSeo.title}
+        description={headlinesSeo.description}
+        canonicalPath="/headlines"
+        alternatesPath="/headlines"
+        keywords={headlinesSeo.keywords}
+        schema={[
+          buildBreadcrumbSchema([
+            { name: BRAND_NAME, path: '/' },
+            { name: 'Civic headlines', path: '/headlines' },
+          ]),
+        ]}
+      />
+      <AppShell>
       <section className="headlines-layout">
         <div className="headlines-hero">
           <div>
@@ -1181,8 +1396,304 @@ function HeadlinesPage() {
           </aside>
         </div>
       </section>
-    </AppShell>
+      </AppShell>
+    </>
   );
+}
+
+function getSeoFaqs(page, ward, category) {
+  if (ward) {
+    return [
+      {
+        question: `How do I report a civic issue in ${ward.name}?`,
+        answer: `Open CivicsPulse, choose the right category, add a photo or voice note, select ${ward.name}, and submit the report for public tracking.`,
+      },
+      {
+        question: `Can reports in ${ward.name} be mapped to representatives?`,
+        answer: 'Yes. CivicsPulse uses ward and zone data so issues can be connected to mapped corporator and MLA dashboards when representative records are available.',
+      },
+    ];
+  }
+  if (category) {
+    return [
+      {
+        question: `What should I include in a ${category.category.toLowerCase()} report?`,
+        answer: 'Add a clear title, exact location or landmark, ward, category, and photo evidence wherever safe.',
+      },
+      {
+        question: 'Can I track the report after submitting?',
+        answer: 'Yes. CivicsPulse creates a public tracking ID so citizens can follow status, representative mapping, and timeline updates.',
+      },
+    ];
+  }
+  return [
+    {
+      question: 'What is CivicsPulse?',
+      answer: 'CivicsPulse is a civic reporting and public issue tracking platform for Mumbai citizens.',
+    },
+    {
+      question: 'Which civic issues can I report?',
+      answer: 'Citizens can report potholes, garbage, water leakage, streetlights, safety hazards, tree issues, and other local problems.',
+    },
+  ];
+}
+
+function PublicIssuePreview({ category, ward }) {
+  const { language } = useT();
+  const { data, isLoading } = useQuery({
+    queryKey: ['seo-public-issues', language, category?.key, ward?.slug],
+    queryFn: () => api.get('/api/feed/home', {
+      params: {
+        category: category?.key?.toUpperCase(),
+        limit: 6,
+      },
+    }).then((r) => r.data),
+    staleTime: 60000,
+  });
+
+  const issues = data?.issues || [];
+
+  return (
+    <section className="seo-panel">
+      <div className="panel-title">
+        <Newspaper size={19} />
+        <h2>Recent public reports</h2>
+      </div>
+      <div className="seo-issue-preview">
+        {isLoading && Array.from({ length: 3 }).map((_, index) => <div className="loading-card seo-preview-card" key={index} />)}
+        {!isLoading && issues.slice(0, 6).map((issue) => (
+          <Link className="seo-preview-card" key={issue.id} to={`/issues/${issue.id}`}>
+            <strong>{issue.title}</strong>
+            <span>{issue.wards?.name || issue.location_label || ward?.name || 'Mumbai'} · {statusLabel(language, issue.status)}</span>
+          </Link>
+        ))}
+        {!isLoading && !issues.length && (
+          <p className="lede">Public reports will appear here after citizens raise issues in the live feed.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function RepresentativeSeoPanel({ type }) {
+  const locations = useQuery({
+    queryKey: ['seo-representative-locations', type],
+    queryFn: () => api.get('/api/reps/locations', { params: { limit: 12 } }).then((r) => r.data),
+    staleTime: 10 * 60 * 1000,
+  });
+  const wards = locations.data?.wards || [];
+
+  return (
+    <section className="seo-panel">
+      <div className="panel-title">
+        <Megaphone size={19} />
+        <h2>{type === 'mla' ? 'MLA zone mapping' : 'Corporator ward mapping'}</h2>
+      </div>
+      <div className="seo-rep-list">
+        {locations.isLoading && Array.from({ length: 4 }).map((_, index) => <div className="loading-card mapping-row" key={index} />)}
+        {!locations.isLoading && wards.slice(0, 10).map((ward) => {
+          const rep = type === 'mla' ? ward.mlas?.[0] : ward.corporators?.[0];
+          return (
+            <div className="mapping-row" key={ward.id || ward.name}>
+              <strong>{ward.name}</strong>
+              <small>{formatWard(ward)}</small>
+              <span>{rep?.name || `Representative data can be uploaded by admin`}</span>
+            </div>
+          );
+        })}
+        {!locations.isLoading && !wards.length && (
+          <p className="lede">Representative rows appear after the admin imports ward, corporator, and MLA data.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function PublicSeoPage({ routePath, routeLanguage }) {
+  const currentLanguage = useLanguageStore((state) => state.language);
+  const setLanguage = useLanguageStore((state) => state.setLanguage);
+  const activeLanguage = routeLanguage || currentLanguage;
+  const page = getSeoPageByPath(routePath) || getSeoPageByPath('/');
+  const normalizedPath = cleanPath(page.path);
+  const category = getCategoryByPath(normalizedPath);
+  const ward = normalizedPath.startsWith('/mumbai/wards/')
+    ? getWardBySlug(normalizedPath.split('/').pop())
+    : null;
+  const copy = getLocalizedSeoCopy(activeLanguage);
+  const languageLabel = SEO_LANGUAGES.find((item) => item.code === activeLanguage)?.label || 'English';
+  const pageTitle = activeLanguage === 'en' ? page.title : `${page.title} - ${languageLabel}`;
+  const pageDescription = activeLanguage === 'en'
+    ? page.description
+    : `${page.description} CivicsPulse supports ${languageLabel} for citizen reporting and public issue tracking.`;
+  const canonicalPath = routeLanguage ? getLocalizedPath(normalizedPath, routeLanguage) : normalizedPath;
+  const faqs = getSeoFaqs(page, ward, category);
+  const breadcrumbs = [
+    { name: BRAND_NAME, path: '/' },
+    { name: normalizedPath === '/' ? 'Mumbai civic reporting' : page.title, path: normalizedPath },
+  ];
+
+  useEffect(() => {
+    if (routeLanguage) setLanguage(routeLanguage);
+  }, [routeLanguage, setLanguage]);
+
+  const quickLinks = [
+    ['Report potholes', '/report-pothole-mumbai'],
+    ['Garbage complaints', '/report-garbage-mumbai'],
+    ['Water leakage', '/report-water-leakage-mumbai'],
+    ['Streetlight issues', '/report-streetlight-mumbai'],
+    ['Corporator list', '/corporator-list-mumbai'],
+    ['MLA list', '/mla-list-mumbai'],
+  ];
+
+  return (
+    <>
+      <SEOHead
+        title={pageTitle}
+        description={pageDescription}
+        canonicalPath={canonicalPath}
+        alternatesPath={normalizedPath}
+        keywords={page.keywords || []}
+        schema={[
+          buildBreadcrumbSchema(breadcrumbs),
+          buildFaqSchema(faqs),
+        ]}
+      />
+      <AppShell>
+        <section className="seo-page">
+          <div className="seo-hero">
+            <div>
+              <p className="eyebrow">{copy.eyebrow}</p>
+              <h1>{ward ? `${ward.name} civic issue tracker` : page.title}</h1>
+              <p className="lede">{ward ? ward.description : pageDescription}</p>
+              <div className="hero-actions">
+                <Link className="button primary large" to="/raise">
+                  <Siren size={18} />
+                  {copy.primaryCta}
+                </Link>
+                <Link className="button secondary large" to="/public-issues">
+                  <Eye size={18} />
+                  {copy.secondaryCta}
+                </Link>
+              </div>
+            </div>
+            <img src="/civic-hero.png" alt="Citizens reporting civic issues in Mumbai" />
+          </div>
+
+          <div className="seo-grid">
+            <section className="seo-panel">
+              <div className="panel-title">
+                <ShieldCheck size={19} />
+                <h2>{copy.trustTitle}</h2>
+              </div>
+              <div className="seo-benefit-list">
+                {copy.trustItems.map((item) => (
+                  <span key={item}><CheckCircle2 size={17} /> {item}</span>
+                ))}
+              </div>
+            </section>
+
+            <section className="seo-panel">
+              <div className="panel-title">
+                <Search size={19} />
+                <h2>{copy.searchIntent}</h2>
+              </div>
+              <div className="seo-chip-list">
+                {(page.keywords || []).map((keyword) => <span key={keyword}>{keyword}</span>)}
+                {ward && <span>{ward.name} ward {ward.wardNumber}</span>}
+                {category && <span>{category.category} public tracker</span>}
+              </div>
+            </section>
+          </div>
+
+          {category && (
+            <section className="seo-panel">
+              <div className="panel-title">
+                <ListFilter size={19} />
+                <h2>How to create a stronger {category.category.toLowerCase()} report</h2>
+              </div>
+              <div className="seo-step-grid">
+                {[
+                  ['Choose the right category', `Select ${category.category} so the report is routed correctly.`],
+                  ['Add exact location', 'Use GPS, ward search, road name, and nearest landmark.'],
+                  ['Attach safe evidence', 'Upload a wide photo and a close-up when it is safe to do so.'],
+                  ['Track publicly', 'Use the CivicsPulse public ID to follow status and timeline updates.'],
+                ].map(([title, body]) => (
+                  <article key={title}>
+                    <strong>{title}</strong>
+                    <span>{body}</span>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {ward && (
+            <section className="seo-panel">
+              <div className="panel-title">
+                <MapPin size={19} />
+                <h2>{ward.name} ward details</h2>
+              </div>
+              <div className="seo-step-grid">
+                <article><strong>Ward</strong><span>{ward.wardNumber}</span></article>
+                <article><strong>Zone</strong><span>{ward.zone}</span></article>
+                <article><strong>City</strong><span>Mumbai, Maharashtra</span></article>
+                <article><strong>Report types</strong><span>Pothole, garbage, water, streetlight, safety, tree</span></article>
+              </div>
+            </section>
+          )}
+
+          {normalizedPath === '/corporator-list-mumbai' && <RepresentativeSeoPanel type="corporator" />}
+          {normalizedPath === '/mla-list-mumbai' && <RepresentativeSeoPanel type="mla" />}
+          {['/public-issues', '/', '/mumbai'].includes(normalizedPath) || category || ward ? (
+            <PublicIssuePreview category={category} ward={ward} />
+          ) : null}
+
+          <section className="seo-panel">
+            <div className="panel-title">
+              <Lightbulb size={19} />
+              <h2>{copy.faqTitle}</h2>
+            </div>
+            <div className="seo-faq-list">
+              {faqs.map((faq) => (
+                <details key={faq.question}>
+                  <summary>{faq.question}</summary>
+                  <p>{faq.answer}</p>
+                </details>
+              ))}
+            </div>
+          </section>
+
+          <section className="seo-panel">
+            <div className="panel-title">
+              <Map size={19} />
+              <h2>Explore more CivicsPulse pages</h2>
+            </div>
+            <div className="seo-link-grid">
+              {quickLinks.map(([label, path]) => <Link key={path} to={path}>{label}</Link>)}
+              {WARD_SEO_PAGES.slice(0, 6).map((item) => (
+                <Link key={item.slug} to={`/mumbai/wards/${item.slug}`}>{item.name}</Link>
+              ))}
+            </div>
+          </section>
+        </section>
+      </AppShell>
+    </>
+  );
+}
+
+function WardSeoRoute() {
+  const { wardSlug } = useParams();
+  return <PublicSeoPage routePath={`/mumbai/wards/${wardSlug}`} />;
+}
+
+function LocalizedPublicRoute() {
+  const { langCode, '*': splat } = useParams();
+  const normalizedLanguage = normalizeLanguage(langCode);
+  if (normalizedLanguage !== langCode) return <Navigate to="/" replace />;
+  const routePath = cleanPath(`/${splat || ''}`);
+  const page = getSeoPageByPath(routePath);
+  if (!page) return <Navigate to="/" replace />;
+  return <PublicSeoPage routePath={routePath} routeLanguage={normalizedLanguage} />;
 }
 
 function IssueCard({ issue, onRefresh }) {
@@ -1577,8 +2088,15 @@ function LoginPage() {
   if (isAuthenticated) return <Navigate to="/raise" replace />;
 
   return (
-    <AppShell compactAuth>
-      <section className="consumer-auth-page">
+    <>
+      <SEOHead
+        title="Sign in to CivicsPulse"
+        description="Sign in to CivicsPulse to raise Mumbai civic issues, select your ward, and track public report timelines."
+        canonicalPath="/login"
+        noindex
+      />
+      <AppShell compactAuth>
+        <section className="consumer-auth-page">
         <motion.div
           className="consumer-auth-story"
           initial="hidden"
@@ -1625,8 +2143,9 @@ function LoginPage() {
           <AuthPanel initialMode="login" />
           <VoiceEntryCard />
         </aside>
-      </section>
-    </AppShell>
+        </section>
+      </AppShell>
+    </>
   );
 }
 
@@ -1657,7 +2176,14 @@ function ResetPasswordPage() {
   });
 
   return (
-    <AppShell>
+    <>
+      <SEOHead
+        title="Reset CivicsPulse password"
+        description="Reset your CivicsPulse account password securely."
+        canonicalPath="/reset-password"
+        noindex
+      />
+      <AppShell>
       <section className="auth-page reset-page">
         <div>
           <p className="eyebrow">{t('passwordReset')}</p>
@@ -1713,13 +2239,15 @@ function ResetPasswordPage() {
           <Link className="text-button auth-link" to="/login">{t('backToSignIn')}</Link>
         </section>
       </section>
-    </AppShell>
+      </AppShell>
+    </>
   );
 }
 
 function RaiseIssuePage() {
   const { isAuthenticated, user } = useAuthStore();
   const { t, language } = useT();
+  const raiseSeo = getSeoPageByPath('/raise');
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const fileRef = useRef(null);
@@ -1941,7 +2469,21 @@ function RaiseIssuePage() {
   };
 
   return (
-    <AppShell>
+    <>
+      <SEOHead
+        title={raiseSeo.title}
+        description={raiseSeo.description}
+        canonicalPath="/raise"
+        alternatesPath="/raise"
+        keywords={raiseSeo.keywords}
+        schema={[
+          buildBreadcrumbSchema([
+            { name: BRAND_NAME, path: '/' },
+            { name: 'Raise civic issue', path: '/raise' },
+          ]),
+        ]}
+      />
+      <AppShell>
       <section className="raise-layout">
         <div className="raise-main">
           <Link to="/" className="back-link"><ArrowLeft size={16} /> {t('backToFeed')}</Link>
@@ -2177,7 +2719,8 @@ function RaiseIssuePage() {
           )}
         </aside>
       </section>
-    </AppShell>
+      </AppShell>
+    </>
   );
 }
 
@@ -2249,8 +2792,60 @@ function IssueDetailPage() {
     onError: (error) => toast.error(error.response?.data?.error || 'Could not report issue'),
   });
 
+  const issuePath = `/issues/${id}`;
+  const issueTitle = issue?.title ? `${issue.title} | CivicsPulse issue tracker` : 'CivicsPulse public issue tracker';
+  const issueDescription = issue?.description
+    ? `${issue.description.slice(0, 150)}${issue.description.length > 150 ? '...' : ''}`
+    : 'Track this public CivicsPulse report, status timeline, ward mapping, and representative routing.';
+  const issueSchema = issue ? {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: issue.title,
+    description: issue.description || issueTitle,
+    datePublished: issue.created_at,
+    dateModified: issue.updated_at || issue.created_at,
+    articleSection: categoryLabel(language, issue.category),
+    inLanguage: SEO_LANGUAGES.find((item) => item.code === language)?.locale || 'en-IN',
+    url: absoluteUrl(issuePath),
+    author: {
+      '@type': 'Organization',
+      name: issue.is_anonymous ? BRAND_NAME : (issue.users?.name || BRAND_NAME),
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: BRAND_NAME,
+      logo: absoluteUrl('/icon.png'),
+    },
+    spatialCoverage: {
+      '@type': 'Place',
+      name: issue.wards?.name || issue.location_label || issue.city || 'Mumbai',
+    },
+  } : null;
+
   return (
-    <AppShell>
+    <>
+      <SEOHead
+        title={issueTitle}
+        description={issueDescription}
+        canonicalPath={issuePath}
+        keywords={[
+          issue?.wards?.name,
+          issue?.location_label,
+          issue?.category ? `${categoryLabel(language, issue.category)} Mumbai` : null,
+          issue?.public_id,
+        ].filter(Boolean)}
+        type="article"
+        noindex={!isLoading && !issue}
+        schema={[
+          buildBreadcrumbSchema([
+            { name: BRAND_NAME, path: '/' },
+            { name: 'Public issues', path: '/public-issues' },
+            { name: issue?.public_id || 'Issue detail', path: issuePath },
+          ]),
+          issueSchema,
+        ]}
+      />
+      <AppShell>
       <section className="detail-page">
         <button className="back-link" type="button" onClick={() => navigate(-1)}>
           <ArrowLeft size={16} />
@@ -2344,7 +2939,8 @@ function IssueDetailPage() {
           </div>
         )}
       </section>
-    </AppShell>
+      </AppShell>
+    </>
   );
 }
 
@@ -2428,22 +3024,37 @@ function ProfileSettingsPage() {
 
   if (!isAuthenticated) {
     return (
-      <AppShell>
-        <section className="auth-page">
+      <>
+        <SEOHead
+          title="CivicsPulse citizen profile"
+          description="Sign in to manage your CivicsPulse profile, language preference, and home ward."
+          canonicalPath="/profile"
+          noindex
+        />
+        <AppShell>
+          <section className="auth-page">
           <div>
             <p className="eyebrow">Citizen profile</p>
             <h1>{t('citizenProfile')}</h1>
             <p className="lede">Your home ward helps CivicsPulse map reports to the right corporator and MLA.</p>
           </div>
           <AuthPanel redirectTo="/profile" />
-        </section>
-      </AppShell>
+          </section>
+        </AppShell>
+      </>
     );
   }
 
   return (
-    <AppShell>
-      <section className="profile-layout">
+    <>
+      <SEOHead
+        title="CivicsPulse profile settings"
+        description="Manage your CivicsPulse profile, preferred language, profile photo, phone number, and home ward."
+        canonicalPath="/profile"
+        noindex
+      />
+      <AppShell>
+        <section className="profile-layout">
         <Link to="/" className="back-link"><ArrowLeft size={16} /> {t('backToFeed')}</Link>
 
         <div className="profile-card profile-hero">
@@ -2537,8 +3148,9 @@ function ProfileSettingsPage() {
             </button>
           </div>
         </form>
-      </section>
-    </AppShell>
+        </section>
+      </AppShell>
+    </>
   );
 }
 
@@ -2613,29 +3225,45 @@ function RepresentativeDeskPage() {
 
   if (!isAuthenticated) {
     return (
-      <AppShell>
-        <section className="auth-page">
+      <>
+        <SEOHead
+          title="CivicsPulse representative desk"
+          description="Representative access for corporators and MLAs to manage mapped CivicsPulse reports."
+          canonicalPath="/rep"
+          noindex
+        />
+        <AppShell>
+          <section className="auth-page">
           <div>
             <p className="eyebrow">Representative desk</p>
             <h1>Sign in to manage tagged posts</h1>
             <p className="lede">Corporator and MLA accounts are linked by admin after representative data is uploaded.</p>
           </div>
           <AuthPanel redirectTo="/rep" />
-        </section>
-      </AppShell>
+          </section>
+        </AppShell>
+      </>
     );
   }
 
   if (!isRep) {
     return (
-      <AppShell>
-        <section className="detail-page">
+      <>
+        <SEOHead
+          title="CivicsPulse representative desk"
+          description="Representative access for mapped corporator and MLA accounts."
+          canonicalPath="/rep"
+          noindex
+        />
+        <AppShell>
+          <section className="detail-page">
           <div className="notice">
             <AlertTriangle size={18} />
             <span>Your account is a citizen account. Admin must link you as a Corporator or MLA before this desk opens.</span>
           </div>
-        </section>
-      </AppShell>
+          </section>
+        </AppShell>
+      </>
     );
   }
 
@@ -2645,7 +3273,14 @@ function RepresentativeDeskPage() {
   const requests = requestsQuery.data?.requests || [];
 
   return (
-    <AppShell>
+    <>
+      <SEOHead
+        title="CivicsPulse representative desk"
+        description="Manage mapped ward reports, status updates, timeline notes, and report card requests."
+        canonicalPath="/rep"
+        noindex
+      />
+      <AppShell>
       <section className="rep-layout">
         <div className="section-heading">
           <div>
@@ -2771,7 +3406,8 @@ function RepresentativeDeskPage() {
           </aside>
         </div>
       </section>
-    </AppShell>
+      </AppShell>
+    </>
   );
 }
 
@@ -2937,29 +3573,45 @@ function AdminImportPage() {
 
   if (!isAuthenticated) {
     return (
-      <AppShell>
-        <section className="auth-page">
+      <>
+        <SEOHead
+          title="CivicsPulse admin access"
+          description="Admin access for CivicsPulse representative imports, ward mapping, report approvals, moderation, and awareness updates."
+          canonicalPath="/admin"
+          noindex
+        />
+        <AppShell>
+          <section className="auth-page">
           <div>
             <p className="eyebrow">Admin access</p>
             <h1>{t('adminAccess')}</h1>
             <p className="lede">The import updates state-city-ward records, maps corporators to wards, and maps MLAs through zones.</p>
           </div>
           <AuthPanel redirectTo="/admin" />
-        </section>
-      </AppShell>
+          </section>
+        </AppShell>
+      </>
     );
   }
 
   if (!isAdmin) {
     return (
-      <AppShell>
-        <section className="detail-page">
+      <>
+        <SEOHead
+          title="CivicsPulse admin access"
+          description="Admin-only CivicsPulse data and moderation tools."
+          canonicalPath="/admin"
+          noindex
+        />
+        <AppShell>
+          <section className="detail-page">
           <div className="notice">
             <AlertTriangle size={18} />
             <span>Only ADMIN users can upload representative data.</span>
           </div>
-        </section>
-      </AppShell>
+          </section>
+        </AppShell>
+      </>
     );
   }
 
@@ -2972,7 +3624,14 @@ function AdminImportPage() {
   const awarenessSource = awarenessItems.data?.source || 'database';
 
   return (
-    <AppShell>
+    <>
+      <SEOHead
+        title="CivicsPulse admin data control"
+        description="Upload ward, corporator, MLA, moderation, report-card, and awareness data for CivicsPulse."
+        canonicalPath="/admin"
+        noindex
+      />
+      <AppShell>
       <section className="admin-layout">
         <div className="section-heading">
           <p className="eyebrow">Backend data control</p>
@@ -3346,7 +4005,8 @@ function AdminImportPage() {
         </section>
         )}
       </section>
-    </AppShell>
+      </AppShell>
+    </>
   );
 }
 
@@ -3354,6 +4014,10 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<DashboardPage />} />
+      {STATIC_SEO_ROUTES.filter((path) => !path.startsWith('/mumbai/wards/')).map((path) => (
+        <Route key={path} path={path} element={<PublicSeoPage routePath={path} />} />
+      ))}
+      <Route path="/mumbai/wards/:wardSlug" element={<WardSeoRoute />} />
       <Route path="/raise" element={<RaiseIssuePage />} />
       <Route path="/headlines" element={<HeadlinesPage />} />
       <Route path="/login" element={<LoginPage />} />
@@ -3362,6 +4026,7 @@ export default function App() {
       <Route path="/rep" element={<RepresentativeDeskPage />} />
       <Route path="/admin" element={<AdminImportPage />} />
       <Route path="/issues/:id" element={<IssueDetailPage />} />
+      <Route path="/:langCode/*" element={<LocalizedPublicRoute />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

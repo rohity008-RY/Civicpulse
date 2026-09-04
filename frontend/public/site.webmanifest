@@ -1,0 +1,17 @@
+{
+  "name": "CivicsPulse",
+  "short_name": "CivicsPulse",
+  "description": "Mumbai civic reporting, public issue tracking, and ward representative mapping.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f7fb",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
