@@ -1187,9 +1187,9 @@ h1 {
 }
 
 .consumer-auth-page {
-  width: min(1220px, calc(100% - 32px));
+  width: min(1280px, calc(100% - 32px));
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 420px;
+  grid-template-columns: minmax(0, 1fr) minmax(390px, 420px);
   gap: 24px;
   align-items: start;
   margin: 0 auto;
@@ -1291,8 +1291,8 @@ h1 {
 .ward-detect-card h2,
 .login-puzzle h2 {
   margin-bottom: 8px;
-  font-size: 22px;
-  line-height: 1.2;
+  font-size: 21px;
+  line-height: 1.24;
 }
 
 .awareness-carousel p,
@@ -1303,6 +1303,7 @@ h1 {
 .auth-welcome-card span,
 .auth-tip-grid span {
   color: var(--muted);
+  line-height: 1.45;
 }
 
 .awareness-dots button {
@@ -1408,8 +1409,17 @@ h1 {
 }
 
 .ward-detect-card {
-  justify-content: space-between;
-  align-items: flex-end;
+  display: grid;
+  align-content: start;
+  align-items: start;
+}
+
+.ward-detect-card .button {
+  width: fit-content;
+  min-width: 166px;
+  margin-top: 6px;
+  white-space: nowrap;
+  justify-self: start;
 }
 
 .ward-detect-card > div {
@@ -1455,15 +1465,17 @@ h1 {
 
 .auth-tip-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 10px;
 }
 
 .auth-tip-grid article {
-  min-height: 124px;
+  min-height: 96px;
   display: grid;
-  align-content: start;
-  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: center;
+  align-items: start;
+  gap: 4px 10px;
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1472,11 +1484,20 @@ h1 {
 }
 
 .auth-tip-grid svg {
+  grid-row: 1 / span 2;
+  margin-top: 3px;
   color: var(--blue);
 }
 
 .auth-tip-grid strong {
   font-family: var(--font-head);
+  font-size: 15px;
+  line-height: 1.28;
+}
+
+.auth-tip-grid span {
+  grid-column: 2;
+  font-size: 14px;
 }
 
 .consumer-auth-aside {
