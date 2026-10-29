@@ -109,7 +109,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid #65adf0; outline-offs
 .citizen-share-menu > a:hover, .citizen-share-menu > button:hover { background: #f0f7f2; }
 .citizen-confirmed { display: flex; align-items: center; gap: 5px; margin-top: 12px; color: #168061; font-size: 11px; }
 .citizen-sidebar > section + section { margin-top: 26px; }
-.citizen-sidebar .track-box { display: block; margin: 0; padding: 20px 0; border: 0; border-top: 1px solid var(--border); border-radius: 0; box-shadow: none; background: transparent; }
+.citizen-sidebar .track-box { display: block; margin: 0; padding: 20px 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; box-shadow: none; background: transparent; }
 .citizen-sidebar .track-box h2 { font-size: 18px; line-height: 1.4; }
 .citizen-sidebar .track-box form { display: flex; margin-top: 14px; gap: 8px; }
 .citizen-sidebar .track-box input { min-width: 0; width: 100%; font-size: 13px; }
@@ -283,7 +283,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid #65adf0; outline-offs
   .citizen-overview > a { display: none; }
   .citizen-feed-tabs { gap: 22px; margin-bottom: 16px; }
   .citizen-feed-tabs > button { font-size: 12px; padding-bottom: 12px; }
-  .citizen-filter-row { gap: 12px; }
+  .citizen-filter-row { gap: 12px; flex-wrap: wrap; }
   .citizen-filter-row select { max-width: 135px; padding-right: 14px; }
   .citizen-filter-row > span { font-size: 10px; }
   .citizen-report { padding: 16px 16px 0; }
