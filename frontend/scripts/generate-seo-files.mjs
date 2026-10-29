@@ -43,7 +43,9 @@ function buildRobots() {
 Allow: /
 Disallow: /admin
 Disallow: /profile
-Disallow: /rep
+Disallow: /rep$
+Disallow: /rep/
+Disallow: /rep?
 Disallow: /reset-password
 
 Sitemap: ${SITE_URL}/sitemap.xml
