@@ -38,7 +38,8 @@ router.post('/mark-read', authenticate, async (req, res) => {
 
     if (ids?.length) query = query.in('id', ids);
 
-    await query;
+    const { error } = await query;
+    if (error) throw error;
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

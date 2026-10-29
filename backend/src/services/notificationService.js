@@ -117,7 +117,10 @@ async function getRepresentativeUserIds(issue) {
 }
 
 async function notifyIssueOwner(issue, type, title, body, extra = {}) {
-  return createNotification(issue?.user_id, type, title, body, {
+  const { data: followers } = await supabase.from('issue_followers')
+    .select('user_id, issues!inner(moderation_status)').eq('issue_id', issue?.id)
+    .in('issues.moderation_status', ['VISIBLE', 'UNDER_REVIEW']);
+  return createNotifications([issue?.user_id, ...(followers || []).map(row => row.user_id)], type, title, body, {
     issue_id: issue?.id,
     public_id: issue?.public_id,
     ...extra,

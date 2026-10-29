@@ -34,7 +34,7 @@ function baseIssueQuery() {
     original_language, state_code, state_name, city, ward_number, ward_id, zone_id,
     corporator_id, mla_id, mp_id, upvote_count, comment_count, share_count,
     trending_score, escalated_at, sla_deadline, resolved_at,
-    users(name, avatar_url),
+    users:users!issues_user_id_fkey(name, avatar_url),
     wards(name, ward_number, city, state_name),
     corporators(id, name, party, photo_url),
     mlas(id, name, party, photo_url)

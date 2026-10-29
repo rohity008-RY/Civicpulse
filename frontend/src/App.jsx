@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
@@ -42,12 +42,17 @@ import {
   Trophy,
   Upload,
   X,
+  Home as HomeIcon,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from './utils/api';
 import { useAuthStore } from './store/authStore';
 import { normalizeLanguage, useLanguageStore } from './store/languageStore';
 import { categoryLabel, statusLabel, useT } from './utils/i18n';
+import CitizenHome, { CitizenUpdates } from './components/citizen/CitizenHome';
+import IssueActions from './components/citizen/IssueActions';
+import { citizenText } from './components/citizen/copy';
+const IssueMap = lazy(() => import('./components/citizen/IssueMap'));
 import {
   BRAND_NAME,
   CATEGORY_SEO_PAGES,
@@ -508,7 +513,8 @@ function SeoFooter() {
 function AppShell({ children, compactAuth = false }) {
   const { isAuthenticated, user, logout } = useAuthStore();
   const navigate = useNavigate();
-  const { t } = useT();
+  const { t, language } = useT();
+  const c = citizenText(language);
 
   return (
     <div className="app-shell">
@@ -517,16 +523,16 @@ function AppShell({ children, compactAuth = false }) {
           <img src="/icon.png" alt="" className="brand-mark" />
           <span>
             <strong>CivicsPulse</strong>
-            <small>Mumbai civic reporting</small>
+            <small>Your neighbourhood. Your voice.</small>
           </span>
         </Link>
 
         {!compactAuth && (
           <nav className="topnav" aria-label="Primary">
-            <NavLink to="/" end>{t('feed')}</NavLink>
-            <NavLink to="/raise">{t('raiseIssue')}</NavLink>
-            <NavLink to="/headlines">{t('headlines')}</NavLink>
-            {isAuthenticated && <NavLink to="/profile">{t('profile')}</NavLink>}
+            <NavLink to="/" end><HomeIcon size={16} />{c.home}</NavLink>
+            <NavLink to="/nearby"><MapPin size={16} />{c.nearby}</NavLink>
+            <NavLink to="/updates"><Bell size={16} />{c.updates}</NavLink>
+            <NavLink to="/headlines"><Newspaper size={16} />{t('headlines')}</NavLink>
             {['CORPORATOR', 'MLA', 'MP'].includes(user?.role) && <NavLink to="/rep">Rep desk</NavLink>}
             {user?.role === 'ADMIN' && <NavLink to="/admin">{t('admin')}</NavLink>}
           </nav>
@@ -565,6 +571,13 @@ function AppShell({ children, compactAuth = false }) {
 
       <main>{children}</main>
       {!compactAuth && <SeoFooter />}
+      {!compactAuth && <nav className="citizen-bottom-nav" aria-label="Mobile navigation">
+        <NavLink to="/" end><HomeIcon size={20} /><span>{c.home}</span></NavLink>
+        <NavLink to="/nearby"><MapPin size={20} /><span>{c.nearby}</span></NavLink>
+        <NavLink to="/raise" className="citizen-nav-report"><span className="citizen-nav-plus"><Plus size={24} /></span><span>{c.report}</span></NavLink>
+        <NavLink to="/updates"><Bell size={20} /><span>{c.updates}</span></NavLink>
+        <NavLink to="/profile"><CircleUserRound size={20} /><span>{t('profile')}</span></NavLink>
+      </nav>}
     </div>
   );
 }
@@ -1071,140 +1084,13 @@ function VoiceEntryCard() {
 }
 
 function DashboardPage() {
-  const reduced = useReducedMotion();
-  const { t, language } = useT();
-  const { isAuthenticated } = useAuthStore();
-  const homeSeo = getSeoPageByPath('/');
-  const [search, setSearch] = useState('');
-  const [category, setCategory] = useState('');
-  const [sort, setSort] = useState('newest');
-  const privateFeed = sort === 'mine' || sort === 'my_escalated';
+  const page = getSeoPageByPath('/');
+  return <><SEOHead title={page.title} description={page.description} canonicalPath="/" keywords={page.keywords} /><AppShell><CitizenHome DailyPuzzle={DailyPuzzleCard} ReportTracker={TrackIssueBox} /></AppShell></>;
+}
 
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ['issues', language, category, sort],
-    queryFn: () => api.get('/api/feed/home', {
-      params: {
-        category: category || undefined,
-        sort: privateFeed ? 'newest' : sort,
-        scope: privateFeed ? sort : undefined,
-        limit: 40,
-      },
-    }).then((r) => r.data),
-    enabled: !privateFeed || isAuthenticated,
-  });
-
-  const issues = useMemo(() => {
-    const value = search.trim().toLowerCase();
-    return (data?.issues || []).filter((issue) => {
-      if (!value) return true;
-      return [issue.title, issue.description, issue.location_label, issue.wards?.name]
-        .filter(Boolean)
-        .some((field) => field.toLowerCase().includes(value));
-    });
-  }, [data?.issues, search]);
-
-  return (
-    <>
-      <SEOHead
-        title={homeSeo.title}
-        description={homeSeo.description}
-        canonicalPath="/"
-        alternatesPath="/"
-        keywords={homeSeo.keywords}
-        schema={[
-          buildBreadcrumbSchema([{ name: BRAND_NAME, path: '/' }]),
-        ]}
-      />
-      <AppShell>
-      <section className="workspace">
-        <PortalHero />
-
-        <StatStrip />
-        <TrackIssueBox />
-        <CivicPulseMapPanel />
-
-        <div className="portal-grid">
-          <DailyPuzzleCard />
-          <motion.aside
-            className="activity-panel"
-            initial={reduced ? false : { opacity: 0, y: 16 }}
-            whileInView={reduced ? undefined : { opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.35 }}
-          >
-            <p className="eyebrow">{t('citizenStreak')}</p>
-            <h2>{t('habitTitle')}</h2>
-            <div className="streak-row">
-              <span>1</span>
-              <span>2</span>
-              <span>3</span>
-              <span>4</span>
-              <span>5</span>
-            </div>
-            <p>{t('habitCopy')}</p>
-          </motion.aside>
-        </div>
-
-        <div className="workspace-header feed-heading">
-          <div>
-            <p className="eyebrow">{t('liveFeed')}</p>
-            <h2>{t('browseReports')}</h2>
-          </div>
-        </div>
-
-        <div className="feed-toolbar">
-          <label className="search-box">
-            <Search size={18} />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder={t('searchPlaceholder')}
-            />
-          </label>
-
-          <label className="select-field">
-            <ListFilter size={17} />
-            <select value={category} onChange={(event) => setCategory(event.target.value)}>
-              <option value="">{t('allCategories')}</option>
-              {CATEGORIES.map(([value]) => <option key={value} value={value}>{categoryLabel(language, value)}</option>)}
-            </select>
-          </label>
-
-          <label className="select-field">
-            <Flame size={17} />
-            <select
-              value={sort}
-              onChange={(event) => {
-                const next = event.target.value;
-                if ((next === 'mine' || next === 'my_escalated') && !isAuthenticated) {
-                  toast.error('Sign in to see your personal reports');
-                  return;
-                }
-                setSort(next);
-              }}
-            >
-              <option value="newest">{t('newest')}</option>
-              <option value="trending">{t('trending')}</option>
-              <option value="upvotes">{t('mostUpvoted')}</option>
-              <option value="escalated">{t('escalated')}</option>
-              <option value="mine">My Issues</option>
-              <option value="my_escalated">My Escalated</option>
-            </select>
-          </label>
-        </div>
-
-        <motion.section className="issue-grid" aria-label="Issue feed" variants={stagger} initial={reduced ? false : 'hidden'} animate={reduced ? undefined : 'visible'}>
-          {isLoading ? (
-            Array.from({ length: 6 }).map((_, index) => <div className="issue-card loading-card" key={index} />)
-          ) : issues.length ? (
-            issues.map((issue) => <IssueCard key={issue.id} issue={issue} onRefresh={refetch} />)
-          ) : (
-            <EmptyState />
-          )}
-        </motion.section>
-      </section>
-      </AppShell>
-    </>
-  );
+function CitizenPage({ mode }) {
+  const path = mode === 'updates' ? '/updates' : mode === 'mine' ? '/my-reports' : '/nearby';
+  return <><SEOHead title={`${mode === 'updates' ? 'Your updates' : mode === 'mine' ? 'Your reports' : 'Nearby civic reports'} | CivicsPulse`} description="Follow the progress of civic reports in your neighbourhood." canonicalPath={path} noindex={mode !== 'nearby'} /><AppShell>{mode === 'updates' ? <CitizenUpdates DailyPuzzle={DailyPuzzleCard} /> : <CitizenHome mode={mode} DailyPuzzle={DailyPuzzleCard} />}</AppShell></>;
 }
 
 function HeadlineCard({ issue, kind = 'latest' }) {
@@ -2085,7 +1971,10 @@ function AuthPanel({ compact = false, redirectTo = '/raise', initialMode = 'regi
 function LoginPage() {
   const { isAuthenticated } = useAuthStore();
   const { t } = useT();
-  if (isAuthenticated) return <Navigate to="/raise" replace />;
+  const [searchParams] = useSearchParams();
+  const next = searchParams.get('next');
+  const redirectTo = next?.startsWith('/') && !next.startsWith('//') ? next : '/';
+  if (isAuthenticated) return <Navigate to={redirectTo} replace />;
 
   return (
     <>
@@ -2105,7 +1994,7 @@ function LoginPage() {
         >
           <motion.div className="consumer-auth-head" variants={fadeUp}>
             <p className="eyebrow">{t('authEyebrow')}</p>
-            <h1>Know your city before you raise your voice</h1>
+            <h1>Your neighbourhood deserves a voice.</h1>
             <p className="lede">
               Sign in to report issues, track public timelines, learn what evidence helps, and stay aware of ward-level civic updates.
             </p>
@@ -2116,18 +2005,8 @@ function LoginPage() {
             <CivicLoginVisual />
           </motion.div>
 
-          <motion.div variants={fadeUp}>
-            <LoginImpactStats />
-          </motion.div>
-
           <motion.div className="consumer-auth-utility-grid" variants={fadeUp}>
             <PublicIssueTracker compact />
-            <WardDetectPreview />
-          </motion.div>
-
-          <motion.div className="consumer-auth-utility-grid report-help-grid" variants={fadeUp}>
-            <AuthMiniPuzzle />
-            <AwarenessTipCards />
           </motion.div>
         </motion.div>
 
@@ -2140,8 +2019,7 @@ function LoginPage() {
               <span>Choose language, sign in with Google or email, and map your ward during signup.</span>
             </div>
           </div>
-          <AuthPanel initialMode="login" />
-          <VoiceEntryCard />
+          <AuthPanel initialMode="login" redirectTo={redirectTo} />
         </aside>
         </section>
       </AppShell>
@@ -2244,6 +2122,13 @@ function ResetPasswordPage() {
   );
 }
 
+function readReportDraft() {
+  try {
+    const draft = JSON.parse(localStorage.getItem('citizen-report-draft') || 'null');
+    return draft && Date.now() - draft.savedAt < 30 * 86400000 ? draft : null;
+  } catch { return null; }
+}
+
 function RaiseIssuePage() {
   const { isAuthenticated, user } = useAuthStore();
   const { t, language } = useT();
@@ -2253,18 +2138,21 @@ function RaiseIssuePage() {
   const fileRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
-  const [form, setForm] = useState({
+  const draftBlocked = useRef(false);
+  const [draft, setDraft] = useState(readReportDraft);
+  const [draftSaved, setDraftSaved] = useState(false);
+  const [form, setForm] = useState(draft?.form || {
     title: '',
     description: '',
     category: 'POTHOLE',
     location_label: '',
     is_anonymous: false,
   });
-  const [location, setLocation] = useState(DEFAULT_LOCATION);
+  const [location, setLocation] = useState(draft?.location || null);
   const [locating, setLocating] = useState(false);
   const [media, setMedia] = useState([]);
   const [wardSearch, setWardSearch] = useState('');
-  const [selectedWardId, setSelectedWardId] = useState(user?.home_ward_id || '');
+  const [selectedWardId, setSelectedWardId] = useState(draft?.wardId || user?.home_ward_id || '');
   const [voiceMode, setVoiceMode] = useState(false);
   const [recording, setRecording] = useState(false);
   const [voiceStep, setVoiceStep] = useState('idle');
@@ -2281,16 +2169,40 @@ function RaiseIssuePage() {
   const selectedWard = wards.find((ward) => ward.id === selectedWardId);
   const visibleWards = useMemo(() => filterWards(wards, wardSearch).slice(0, 8), [wards, wardSearch]);
 
+  useEffect(() => {
+    if (!form.title && !form.description && !location) return;
+    draftBlocked.current = false;
+    setDraftSaved(false);
+    const persistDraft = (showSaved = true) => {
+      if (draftBlocked.current) return;
+      try {
+        localStorage.setItem('citizen-report-draft', JSON.stringify({ form, location, wardId: selectedWardId, savedAt: Date.now() }));
+        if (showSaved) setDraftSaved(true);
+      } catch { if (showSaved) setDraftSaved(false); }
+    };
+    const timer = setTimeout(persistDraft, 500);
+    return () => { clearTimeout(timer); persistDraft(false); };
+  }, [form, location, selectedWardId]);
+
+  const similar = useQuery({
+    queryKey: ['report-suggestions', language, form.category, selectedWardId],
+    enabled: Boolean(selectedWardId && form.title.trim().length >= 8),
+    queryFn: () => api.get('/api/feed/home', { params: { ward_id: selectedWardId, category: form.category, limit: 3 } }).then(r => r.data),
+    staleTime: 60000,
+  });
+
   const submitIssue = useMutation({
     mutationFn: async () => {
       const fd = new FormData();
       fd.append('title', form.title.trim());
       fd.append('description', form.description.trim());
       fd.append('category', form.category);
-      fd.append('location_label', form.location_label.trim() || selectedWard?.name || location.location_label || 'Mumbai');
+      fd.append('location_label', form.location_label.trim() || selectedWard?.name || location?.location_label || 'Mumbai');
       fd.append('is_anonymous', String(form.is_anonymous));
-      fd.append('lat', String(location.lat));
-      fd.append('lng', String(location.lng));
+      if (location) {
+        fd.append('lat', String(location.lat));
+        fd.append('lng', String(location.lng));
+      }
       fd.append('source', voiceStep === 'review' ? 'VOICE' : 'TYPED');
       fd.append('language_code', language);
       if (selectedWard) {
@@ -2306,6 +2218,8 @@ function RaiseIssuePage() {
       return data;
     },
     onSuccess: (data) => {
+      draftBlocked.current = true;
+      localStorage.removeItem('citizen-report-draft');
       toast.success(data.media_warning || 'Issue raised');
       queryClient.invalidateQueries({ queryKey: ['issues'] });
       queryClient.invalidateQueries({ queryKey: ['feed-stats'] });
@@ -2491,6 +2405,7 @@ function RaiseIssuePage() {
             <p className="eyebrow">{t('newReport')}</p>
             <h1>{t('raiseWeb')}</h1>
           </div>
+          {(draft || draftSaved) && <div className="citizen-draft-bar"><span><CheckCircle2 size={14} /> Draft saved on this device. Photos need to be reattached after leaving.</span><button type="button" className="text-button" onClick={() => { draftBlocked.current = true; localStorage.removeItem('citizen-report-draft'); setForm({ title: '', description: '', category: 'POTHOLE', location_label: '', is_anonymous: false }); setLocation(null); setSelectedWardId(''); setDraft(null); setDraftSaved(false); }}>Clear</button></div>}
 
           {!isAuthenticated && (
             <div className="notice">
@@ -2544,7 +2459,7 @@ function RaiseIssuePage() {
             onSubmit={(event) => {
               event.preventDefault();
               if (!isAuthenticated) {
-                toast.error('Please sign in before submitting');
+                navigate('/login?next=%2Fraise');
                 return;
               }
               if (!selectedWard && !location) {
@@ -2607,28 +2522,7 @@ function RaiseIssuePage() {
               </button>
             </div>
 
-            <div className="coordinate-row">
-              <label>
-                Latitude
-                <input
-                  required
-                  type="number"
-                  step="any"
-                  value={location.lat}
-                  onChange={(event) => setLocation((state) => ({ ...state, lat: Number(event.target.value) }))}
-                />
-              </label>
-              <label>
-                Longitude
-                <input
-                  required
-                  type="number"
-                  step="any"
-                  value={location.lng}
-                  onChange={(event) => setLocation((state) => ({ ...state, lng: Number(event.target.value) }))}
-                />
-              </label>
-            </div>
+            <details className="citizen-pin-picker"><summary><MapPin size={16} />{location ? 'Location pinned. Adjust on map' : 'Pin the exact location on the map (optional)'}</summary><Suspense fallback={<div className="citizen-map-loading"><Loader2 className="spin" /></div>}><IssueMap selected={location} onPick={point => setLocation(point)} height={300} /></Suspense></details>
 
             <fieldset>
               <legend>{t('wardMapping')}</legend>
@@ -2700,9 +2594,11 @@ function RaiseIssuePage() {
               {t('submitAnon')}
             </label>
 
+            {Boolean(similar.data?.issues?.length) && <section className="citizen-similar"><h2>Already reported in this ward?</h2><p>These reports share your category and ward. You can support and follow one instead.</p>{similar.data.issues.map(issue => <Link key={issue.id} to={`/issues/${issue.id}`}><span><strong>{issue.title}</strong><small>{statusLabel(language, issue.status)}</small></span><ArrowLeft size={15} style={{ transform: 'rotate(180deg)' }} /></Link>)}</section>}
+
             <button className="button primary submit-button" type="submit" disabled={submitIssue.isPending}>
               {submitIssue.isPending ? <Loader2 size={18} className="spin" /> : <Send size={18} />}
-              {t('submitIssue')}
+              {isAuthenticated ? t('submitIssue') : 'Sign in to submit'}
             </button>
           </form>
         </div>
@@ -2715,7 +2611,7 @@ function RaiseIssuePage() {
               <p>{t('readyCopy')}</p>
             </div>
           ) : (
-            <AuthPanel compact />
+            <AuthPanel compact redirectTo="/raise" />
           )}
         </aside>
       </section>
@@ -2792,6 +2688,12 @@ function IssueDetailPage() {
     onError: (error) => toast.error(error.response?.data?.error || 'Could not report issue'),
   });
 
+  const confirmResolution = useMutation({
+    mutationFn: () => api.post(`/api/community/issues/${id}/confirm-resolution`),
+    onSuccess: () => { toast.success('Thank you for confirming the repair'); refetch(); queryClient.invalidateQueries({ queryKey: ['issues'] }); },
+    onError: error => toast.error(error.response?.data?.error || 'Could not confirm resolution'),
+  });
+
   const issuePath = `/issues/${id}`;
   const issueTitle = issue?.title ? `${issue.title} | CivicsPulse issue tracker` : 'CivicsPulse public issue tracker';
   const issueDescription = issue?.description
@@ -2847,7 +2749,7 @@ function IssueDetailPage() {
       />
       <AppShell>
       <section className="detail-page">
-        <button className="back-link" type="button" onClick={() => navigate(-1)}>
+        <button className="back-link" type="button" onClick={() => window.history.state?.idx > 0 ? navigate(-1) : navigate('/')}>
           <ArrowLeft size={16} />
           {t('back')}
         </button>
@@ -2874,6 +2776,7 @@ function IssueDetailPage() {
                 {issue.reopen_count > 0 && <span><RotateCcw size={17} /> Reopened {issue.reopen_count} time{issue.reopen_count === 1 ? '' : 's'}</span>}
               </div>
               <div className="issue-action-strip">
+                <IssueActions issue={issue} onRefresh={refetch} />
                 {canReopen && (
                   <div className="reopen-box">
                     <input
@@ -2894,6 +2797,7 @@ function IssueDetailPage() {
                   </button>
                 )}
               </div>
+              {issue.status === 'RESOLVED' && <section className="citizen-resolution"><h2>{issue.resolution_confirmed_at ? 'Confirmed fixed by the citizen' : 'Has this problem been fixed?'}</h2>{issue.resolved_proof_url && <div className="citizen-resolution-photos">{issue.issue_media?.find(media => media.media_type === 'IMAGE') && <figure><img src={issue.issue_media.find(media => media.media_type === 'IMAGE').cdn_url} alt="Original issue" /><figcaption>Before</figcaption></figure>}<figure><img src={issue.resolved_proof_url} alt="Resolution evidence uploaded by representative" /><figcaption>After · representative evidence</figcaption></figure></div>}{!issue.resolution_confirmed_at && user?.id === issue.user_id && <button type="button" className="button primary" disabled={confirmResolution.isPending} onClick={() => confirmResolution.mutate()}><CheckCircle2 size={16} />Confirm this is fixed</button>}{issue.resolution_confirmed_at && <p className="citizen-confirmed"><ShieldCheck size={16} />The report owner confirmed this repair.</p>}</section>}
             </article>
 
             {(duplicates.data?.duplicates || []).length > 0 && (
@@ -3160,6 +3064,7 @@ function RepresentativeDeskPage() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState('');
   const [statusNote, setStatusNote] = useState('');
+  const [resolutionProof, setResolutionProof] = useState({});
   const [reportForm, setReportForm] = useState(() => {
     const now = new Date();
     return { month: now.getMonth() + 1, year: now.getFullYear() };
@@ -3188,7 +3093,14 @@ function RepresentativeDeskPage() {
   });
 
   const updateStatus = useMutation({
-    mutationFn: ({ issueId, status }) => api.patch(`/api/issues/${issueId}/status`, { status, note: statusNote }),
+    mutationFn: ({ issueId, status }) => {
+      if (status === 'RESOLVED' && resolutionProof[issueId]) {
+        const body = new FormData();
+        body.append('status', status); body.append('note', statusNote); body.append('proof', resolutionProof[issueId]);
+        return api.patch(`/api/issues/${issueId}/status`, body);
+      }
+      return api.patch(`/api/issues/${issueId}/status`, { status, note: statusNote });
+    },
     onSuccess: () => {
       setStatusNote('');
       toast.success('Status updated');
@@ -3334,11 +3246,12 @@ function RepresentativeDeskPage() {
                     <p>{issue.wards?.name || issue.location_label || issue.city || 'Mapped area'}</p>
                   </div>
                   <div className="rep-actions">
+                    <label className="rep-proof-upload">Repair photo (optional)<input type="file" accept="image/jpeg,image/png,image/webp" onChange={event => setResolutionProof(state => ({ ...state, [issue.id]: event.target.files?.[0] }))} /></label>
                     <Link className="text-button" to={`/issues/${issue.id}`}><Eye size={16} /> View</Link>
-                    <button className="button secondary" type="button" onClick={() => updateStatus.mutate({ issueId: issue.id, status: 'IN_PROGRESS' })}>
+                    <button className="button secondary" type="button" disabled={updateStatus.isPending} onClick={() => updateStatus.mutate({ issueId: issue.id, status: 'IN_PROGRESS' })}>
                       In progress
                     </button>
-                    <button className="button primary" type="button" onClick={() => updateStatus.mutate({ issueId: issue.id, status: 'RESOLVED' })}>
+                    <button className="button primary" type="button" disabled={updateStatus.isPending} onClick={() => updateStatus.mutate({ issueId: issue.id, status: 'RESOLVED' })}>
                       Resolved
                     </button>
                   </div>
@@ -4014,6 +3927,9 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<DashboardPage />} />
+      <Route path="/nearby" element={<CitizenPage mode="nearby" />} />
+      <Route path="/updates" element={<CitizenPage mode="updates" />} />
+      <Route path="/my-reports" element={<CitizenPage mode="mine" />} />
       {STATIC_SEO_ROUTES.filter((path) => !path.startsWith('/mumbai/wards/')).map((path) => (
         <Route key={path} path={path} element={<PublicSeoPage routePath={path} />} />
       ))}

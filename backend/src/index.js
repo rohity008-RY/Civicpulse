@@ -16,6 +16,8 @@ const notifRoutes     = require('./routes/notifications');
 const analyticsRoutes = require('./routes/analytics');
 const awarenessRoutes = require('./routes/awareness');
 const representativeDashboardRoutes = require('./routes/representativeDashboard');
+const communityRoutes = require('./routes/community');
+const { startDigestJob } = require('./services/digestJob');
 
 const { startEscalationJob } = require('./services/escalationJob');
 const { startTrendingJob }   = require('./services/trendingJob');
@@ -58,6 +60,7 @@ app.use('/api/voice',       voiceRoutes);
 app.use('/api/notifications', notifRoutes);
 app.use('/api/analytics',   analyticsRoutes);
 app.use('/api/awareness',   awarenessRoutes);
+app.use('/api/community', communityRoutes);
 
 // ─── Error Handler ───────────────────────────────────────────
 app.use((err, req, res, next) => {
@@ -72,8 +75,11 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   logger.info(`CivicsPulse API running on port ${PORT}`);
   // Start background jobs
-  startEscalationJob();
-  startTrendingJob();
+  if (process.env.DISABLE_BACKGROUND_JOBS !== 'true') {
+    startEscalationJob();
+    startTrendingJob();
+    startDigestJob();
+  }
 });
 
 module.exports = app;

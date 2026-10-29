@@ -56,7 +56,7 @@ router.get('/', optionalAuth, async (req, res) => {
   try {
     const { ward_id, zone_id, state_code, city, category, status, mine, escalated, sort = 'created_at', page = 1, limit = 20 } = req.query;
     let query = supabase.from('issues')
-      .select(`*, users(name, avatar_url), issue_media(cdn_url, media_type),
+      .select(`*, users:users!issues_user_id_fkey(name, avatar_url), issue_media(cdn_url, media_type),
                corporators(name, party, photo_url), mlas(name, party, photo_url),
                wards(name, ward_number, city, state_name), zones(name, city, state_name)`)
       .neq('status', 'CLOSED')
@@ -91,6 +91,7 @@ router.get('/', optionalAuth, async (req, res) => {
     }
 
     const languageCode = resolveRequestLanguage(req);
+    data.forEach(issue => { if (issue.is_anonymous) issue.users = null; });
     const issues = await localizeIssues(data, languageCode);
     res.json({ issues, total: count, page: +page, limit: +limit, language_code: languageCode });
   } catch (err) {
@@ -102,7 +103,7 @@ router.get('/', optionalAuth, async (req, res) => {
 router.get('/track/:publicId', optionalAuth, async (req, res) => {
   try {
     let query = supabase.from('issues')
-      .select(`*, users(name, avatar_url),
+      .select(`*, users:users!issues_user_id_fkey(name, avatar_url),
                issue_media(id, cdn_url, s3_url, media_type),
                issue_history(action, actor_role, note, metadata, created_at),
                wards(name, ward_number, city, state_name), zones(name),
@@ -117,6 +118,7 @@ router.get('/track/:publicId', optionalAuth, async (req, res) => {
     if (error || !issue) return res.status(404).json({ error: 'Issue not found' });
 
     const languageCode = resolveRequestLanguage(req);
+    if (issue.is_anonymous) issue.users = null;
     const [localizedIssue] = await localizeIssues([issue], languageCode);
     res.json({ issue: localizedIssue, language_code: languageCode });
   } catch (err) {
@@ -128,7 +130,7 @@ router.get('/track/:publicId', optionalAuth, async (req, res) => {
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
     let query = supabase.from('issues')
-      .select(`*, users(name, avatar_url),
+      .select(`*, users:users!issues_user_id_fkey(name, avatar_url),
                issue_media(id, cdn_url, s3_url, media_type),
                issue_history(action, actor_role, note, metadata, created_at),
                wards(name, ward_number, city, state_name), zones(name),
@@ -149,6 +151,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
     }
 
     const languageCode = resolveRequestLanguage(req);
+    if (issue.is_anonymous) issue.users = null;
     const [localizedIssue] = await localizeIssues([issue], languageCode);
     res.json({ issue: localizedIssue, language_code: languageCode });
   } catch (err) {
@@ -167,6 +170,9 @@ router.post('/', authenticate, upload.array('media', 4), async (req, res) => {
       return res.status(400).json({ error: 'title and category required' });
 
     const hasPoint = lat !== undefined && lng !== undefined && lat !== '' && lng !== '';
+    if (hasPoint && (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng)) || Math.abs(Number(lat)) > 90 || Math.abs(Number(lng)) > 180)) {
+      return res.status(400).json({ error: 'Choose a valid map location' });
+    }
     if (!hasPoint && !ward_id && !(city && (ward_number || ward_name))) {
       return res.status(400).json({ error: 'lat/lng or ward selection required' });
     }
@@ -275,7 +281,7 @@ router.post('/', authenticate, upload.array('media', 4), async (req, res) => {
 });
 
 // ─── PATCH /api/issues/:id/status ────────────────────────────
-router.patch('/:id/status', authenticate, isRep, async (req, res) => {
+router.patch('/:id/status', authenticate, isRep, upload.single('proof'), async (req, res) => {
   try {
     const { status, note } = req.body;
     const validStatuses = ['ASSIGNED','IN_PROGRESS','RESOLVED'];
@@ -297,6 +303,11 @@ router.patch('/:id/status', authenticate, isRep, async (req, res) => {
     }
 
     const updates = { status, updated_at: new Date() };
+    if (req.file) {
+      if (status !== 'RESOLVED' || !req.file.mimetype.startsWith('image/')) return res.status(400).json({ error: 'Resolution proof must be an image for a resolved report' });
+      updates.resolved_proof_url = (await uploadMedia(req.file, currentIssue.id)).cdn_url;
+    }
+    if (status !== 'RESOLVED') updates.resolution_confirmed_at = null;
     if (status === 'RESOLVED') updates.resolved_at = new Date(), updates.resolved_by_role = req.user.role;
 
     const { data: issue, error } = await supabase.from('issues')
@@ -350,6 +361,7 @@ router.post('/:id/reopen', authenticate, async (req, res) => {
         status: 'OPEN',
         resolved_at: null,
         resolved_by_role: null,
+        resolution_confirmed_at: null,
         reopened_at: new Date(),
         reopened_by: req.user.id,
         reopen_count: (currentIssue.reopen_count || 0) + 1,

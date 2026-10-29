@@ -3,6 +3,7 @@ const router = express.Router();
 const supabase = require('../config/supabase');
 const { optionalAuth } = require('../middleware/auth');
 const { resolveRequestLanguage, localizeIssues } = require('../services/languageService');
+const { parsePoint } = require('../services/pointService');
 
 const MODERATION_VISIBLE = ['VISIBLE', 'UNDER_REVIEW'];
 const PRIVILEGED_ROLES = ['ADMIN', 'MODERATOR'];
@@ -12,18 +13,6 @@ function applyModerationVisibility(query, user) {
   return query.in('moderation_status', MODERATION_VISIBLE);
 }
 
-function parsePoint(location) {
-  if (!location) return { lat: null, lng: null };
-  if (Array.isArray(location.coordinates)) {
-    return { lng: location.coordinates[0] ?? null, lat: location.coordinates[1] ?? null };
-  }
-  if (typeof location === 'string') {
-    const match = location.match(/POINT\((-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\)/i);
-    if (match) return { lng: Number(match[1]), lat: Number(match[2]) };
-  }
-  return { lat: null, lng: null };
-}
-
 // ─── GET /api/feed/home ───────────────────────────────────────
 router.get('/home', optionalAuth, async (req, res) => {
   try {
@@ -31,11 +20,11 @@ router.get('/home', optionalAuth, async (req, res) => {
 
     let query = supabase.from('issues')
       .select(`id, public_id, title, description, category, status, location_label, created_at, original_language,
-               state_code, state_name, city, ward_number,
+               state_code, state_name, city, ward_number, ward_id, resolved_proof_url, resolution_confirmed_at,
                upvote_count, comment_count, share_count, trending_score, trending_rank,
                is_community_spotlight, escalated_at, escalated_to_role,
                sla_deadline, reopened_at, reopen_count, moderation_status, is_anonymous, source,
-               users(name, avatar_url),
+               users:users!issues_user_id_fkey(name, avatar_url),
                issue_media(cdn_url, media_type),
                corporators(name, party, photo_url),
                mlas(name, party, photo_url),
@@ -75,6 +64,7 @@ router.get('/home', optionalAuth, async (req, res) => {
     }
 
     const languageCode = resolveRequestLanguage(req);
+    issues.forEach(issue => { if (issue.is_anonymous) issue.users = null; });
     const localizedIssues = await localizeIssues(issues, languageCode);
     res.json({ issues: localizedIssues, language_code: languageCode });
   } catch (err) {
@@ -91,8 +81,8 @@ router.get('/escalated', optionalAuth, async (req, res) => {
       .select(`id, public_id, title, description, category, status, location_label, created_at, original_language,
                state_code, state_name, city, ward_number,
                upvote_count, comment_count, share_count, trending_score, trending_rank,
-               escalated_at, escalated_to_role, escalated_to_mp_at, sla_deadline, reopened_at, reopen_count, moderation_status,
-               users(name, avatar_url),
+               escalated_at, escalated_to_role, escalated_to_mp_at, sla_deadline, reopened_at, reopen_count, moderation_status, is_anonymous,
+               users:users!issues_user_id_fkey(name, avatar_url),
                issue_media(cdn_url, media_type),
                corporators(name, party, photo_url),
                mlas(id, name, party, photo_url),
@@ -126,6 +116,7 @@ router.get('/escalated', optionalAuth, async (req, res) => {
     }
 
     const languageCode = resolveRequestLanguage(req);
+    issues.forEach(issue => { if (issue.is_anonymous) issue.users = null; });
     const localizedIssues = await localizeIssues(issues, languageCode);
     res.json({ issues: localizedIssues, language_code: languageCode });
   } catch (err) {
@@ -171,7 +162,7 @@ router.get('/trending', optionalAuth, async (req, res) => {
 // ─── GET /api/feed/map — public ward/city issue points ────────
 router.get('/map', optionalAuth, async (req, res) => {
   try {
-    const { state_code, city, ward_id, status, limit = 100 } = req.query;
+    const { state_code, city, ward_id, status, category, limit = 100 } = req.query;
     let query = supabase.from('issues')
       .select(`id, public_id, title, category, status, location, location_label, created_at,
                state_code, state_name, city, ward_number, ward_id, upvote_count, trending_score,
@@ -179,13 +170,14 @@ router.get('/map', optionalAuth, async (req, res) => {
                corporators(name, party), mlas(name, party)`)
       .neq('status', 'CLOSED')
       .order('created_at', { ascending: false })
-      .limit(Number(limit) || 100);
+      .limit(Math.max(1, Math.min(200, Number(limit) || 100)));
     query = applyModerationVisibility(query, req.user);
 
     if (state_code) query = query.eq('state_code', String(state_code).toUpperCase());
     if (city) query = query.ilike('city', city);
     if (ward_id) query = query.eq('ward_id', ward_id);
     if (status) query = query.eq('status', status);
+    if (category) query = query.eq('category', category);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -199,7 +191,8 @@ router.get('/map', optionalAuth, async (req, res) => {
         location: undefined,
       };
     });
-    res.json({ points });
+    const localized = await localizeIssues(points, resolveRequestLanguage(req));
+    res.json({ points: localized, unmapped_count: points.filter(point => point.lat === null || point.lng === null).length });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -214,6 +207,7 @@ router.get('/digest', optionalAuth, async (req, res) => {
       .gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString())
       .limit(1000);
     query = applyModerationVisibility(query, req.user);
+    if (req.query.ward_id) query = query.eq('ward_id', req.query.ward_id);
 
     const { data: issues, error } = await query;
     if (error) throw error;

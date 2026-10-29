@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const supabase = require('../config/supabase');
 const logger = require('../utils/logger');
+const { notifyIssueOwner } = require('./notificationService');
 
 async function runEscalation() {
   logger.info('Running escalation check...');
@@ -60,6 +61,7 @@ async function escalateIssue(issue) {
   });
 
   logger.info(`Issue ${issue.id} escalated to MLA`);
+  await notifyIssueOwner(issue, 'ISSUE_ESCALATED_MLA', 'Report escalated to MLA', issue.title, { status: 'ESCALATED_TO_MLA' });
 }
 
 async function escalateToMP(issue) {
@@ -78,6 +80,7 @@ async function escalateToMP(issue) {
   });
 
   logger.info(`Issue ${issue.id} escalated to MP`);
+  await notifyIssueOwner(issue, 'ISSUE_ESCALATED_MP', 'Report escalated to MP', issue.title, { status: 'ESCALATED_TO_MP' });
 }
 
 function startEscalationJob() {
