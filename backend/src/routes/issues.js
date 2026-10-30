@@ -211,7 +211,7 @@ router.post('/', authenticate, upload.array('media', 4), async (req, res) => {
       mla_id: geo.mla_id,
       mp_id: geo.mp_id,
       sla_deadline,
-      is_anonymous: is_anonymous === 'true',
+      is_anonymous: is_anonymous === true || is_anonymous === 'true',
       source: source || 'TYPED',
       original_language
     }).select().single();
@@ -232,12 +232,14 @@ router.post('/', authenticate, upload.array('media', 4), async (req, res) => {
 
     // Upload media files
     if (req.files?.length) {
-      try {
-        const mediaInserts = await Promise.all(req.files.map(f => uploadMedia(f, issueId)));
-        await supabase.from('issue_media').insert(mediaInserts);
-      } catch (uploadErr) {
-        if (uploadErr.code !== 'S3_NOT_CONFIGURED') throw uploadErr;
-        media_warning = 'Issue raised. Media storage is not configured yet, so photos/videos were not uploaded.';
+      const uploads = await Promise.allSettled(req.files.map(file => uploadMedia(file, issueId)));
+      const mediaInserts = uploads.filter(result => result.status === 'fulfilled').map(result => result.value);
+      if (uploads.some(result => result.status === 'rejected')) {
+        media_warning = 'Report submitted, but some attachments could not be uploaded. Keep your originals and try again later.';
+      }
+      if (mediaInserts.length) {
+        const { error: mediaError } = await supabase.from('issue_media').insert(mediaInserts);
+        if (mediaError) media_warning = 'Report submitted, but attachments could not be saved. Keep your originals and try again later.';
       }
     }
 

@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, ActivityIndicator, Alert, TextInput
 } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { formatDistanceToNow } from 'date-fns';
+import { timeAgo } from '../utils/date';
 import api from '../utils/api';
 import { useAuthStore } from '../store/authStore';
 import { categoryLabel, statusLabel, useT } from '../utils/i18n';
@@ -155,7 +155,7 @@ export default function IssueDetailScreen({ navigation, route }) {
               <Text style={styles.fact}>📍 {issue.wards?.name || issue.location_label || issue.city || 'Location pending'}</Text>
               <Text style={styles.fact}>🏙️ {[issue.city, issue.state_name].filter(Boolean).join(', ') || 'City mapping pending'}</Text>
               <Text style={styles.fact}>👍 {issue.upvote_count || 0} upvotes · 💬 {issue.comment_count || 0} comments</Text>
-              <Text style={styles.fact}>⏱️ {formatDistanceToNow(new Date(issue.created_at), { addSuffix: true })}</Text>
+              <Text style={styles.fact}>⏱️ {timeAgo(issue.created_at, language)}</Text>
               {issue.reopen_count > 0 && <Text style={styles.fact}>↻ Reopened {issue.reopen_count} time{issue.reopen_count === 1 ? '' : 's'}</Text>}
             </View>
 
@@ -229,7 +229,7 @@ export default function IssueDetailScreen({ navigation, route }) {
             {(issue.issue_history || []).map((event) => (
               <View key={`${event.action}-${event.created_at}`} style={styles.timelineItem}>
                 <Text style={styles.timelineTitle}>{event.action}</Text>
-                <Text style={styles.muted}>{event.actor_role || 'System'} · {formatDistanceToNow(new Date(event.created_at), { addSuffix: true })}</Text>
+                <Text style={styles.muted}>{event.actor_role || 'System'} · {timeAgo(event.created_at, language)}</Text>
                 {!!event.note && <Text style={styles.description}>{event.note}</Text>}
               </View>
             ))}

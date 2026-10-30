@@ -13,12 +13,13 @@ const authenticate = async (req, res, next) => {
 
     const { data: user, error } = await supabase
       .from('users')
-      .select('id, name, email, phone, role, home_ward_id, avatar_url, preferred_language, is_active')
+      .select('id, name, email, phone, role, home_ward_id, avatar_url, preferred_language, is_active, session_version')
       .eq('id', decoded.sub)
       .single();
 
     if (error || !user) return res.status(401).json({ error: 'Invalid token' });
     if (!user.is_active) return res.status(403).json({ error: 'Account suspended' });
+    if ((decoded.av || 0) !== (user.session_version || 0)) return res.status(401).json({ error: 'Session ended. Please sign in again.' });
 
     req.user = user;
     next();
@@ -38,7 +39,7 @@ const optionalAuth = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const { data: user } = await supabase
       .from('users').select('*').eq('id', decoded.sub).single();
-    req.user = user;
+    if (user?.is_active && (decoded.av || 0) === (user.session_version || 0)) req.user = user;
   } catch (_) {}
   next();
 };

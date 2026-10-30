@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet, Share } from 'react-native';
-import { formatDistanceToNow } from 'date-fns';
+import { timeAgo } from '../utils/date';
 import { useAuthStore } from '../store/authStore';
 import api from '../utils/api';
 import { colors, CAT_CONFIG, STATUS_CONFIG } from '../utils/theme';
@@ -42,7 +42,7 @@ export default function IssueCard({ issue, onUpvote, onPress }) {
             }
           </Text>
           <Text style={[styles.escTime, issue.escalated_to_mp_at && { color: colors.red2 }]}>
-            {formatDistanceToNow(new Date(issue.escalated_at), { addSuffix: true })}
+            {timeAgo(issue.escalated_at, language)}
           </Text>
         </View>
       )}
@@ -118,7 +118,7 @@ export default function IssueCard({ issue, onUpvote, onPress }) {
             <Text style={styles.engTxt}>{t('share')}</Text>
           </TouchableOpacity>
           <Text style={[styles.engTxt, { marginLeft: 'auto', color: colors.text3 }]}>
-            {formatDistanceToNow(new Date(issue.created_at), { addSuffix: true })}
+            {timeAgo(issue.created_at, language)}
           </Text>
         </View>
       </View>

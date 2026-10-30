@@ -43,7 +43,7 @@ export default function ProfileScreen({ navigation }) {
   });
 
   const myIssues = useQuery({
-    queryKey: ['profile-my-issues', user?.id],
+    queryKey: ['profile-my-issues', user?.id, language],
     queryFn: () => api.get('/api/feed/home', { params: { scope: 'mine', limit: 80 } }).then((r) => r.data),
     enabled: Boolean(user?.id),
   });

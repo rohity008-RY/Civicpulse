@@ -23,10 +23,12 @@ async function verifyGoogleIdToken(idToken) {
     throw error;
   }
 
-  const ticket = await client.verifyIdToken({
-    idToken,
-    audience: clientIds.length === 1 ? clientIds[0] : clientIds,
-  });
+  let ticket;
+  try {
+    ticket = await client.verifyIdToken({ idToken, audience: clientIds.length === 1 ? clientIds[0] : clientIds });
+  } catch {
+    throw Object.assign(new Error('Google sign-in could not be verified. Please try again.'), { status: 401 });
+  }
   const payload = ticket.getPayload();
 
   if (!payload?.sub || !payload?.email) {
@@ -35,7 +37,7 @@ async function verifyGoogleIdToken(idToken) {
     throw error;
   }
 
-  if (payload.email_verified === false) {
+  if (payload.email_verified !== true) {
     const error = new Error('Google email is not verified');
     error.status = 401;
     throw error;

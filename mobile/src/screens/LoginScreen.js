@@ -14,7 +14,6 @@ import api from '../utils/api';
 import { colors } from '../utils/theme';
 
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '';
-const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '';
 
 const AWARENESS_ITEMS = [
   {
@@ -59,7 +58,9 @@ export default function LoginScreen({ navigation }) {
   const [trackingCode, setTrackingCode] = useState('');
   const [trackingIssue, setTrackingIssue] = useState(false);
   const [previewWard, setPreviewWard] = useState(null);
-  const googleConfigured = Boolean(GOOGLE_WEB_CLIENT_ID || GOOGLE_ANDROID_CLIENT_ID);
+  const authConfig = useQuery({ queryKey: ['auth-config'], queryFn: () => api.get('/api/auth/config').then(result => result.data), staleTime: 60000 });
+  const googleClientId = GOOGLE_WEB_CLIENT_ID || authConfig.data?.google_web_client_id || '';
+  const googleConfigured = Boolean(googleClientId);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -92,9 +93,9 @@ export default function LoginScreen({ navigation }) {
   const selectedWard = wards.find((ward) => ward.id === selectedWardId);
 
   const handleAuth = async () => {
-    if (!form.email || !form.password) { Alert.alert('Error', 'Email and password required'); return; }
-    if (isRegister && !form.name) { Alert.alert('Error', 'Name required'); return; }
-    if (isRegister && !selectedWardId) { Alert.alert('Ward required', 'Select ward/zone or use current location before creating account.'); return; }
+    if (!form.email || !form.password) { Alert.alert(t('error'), t('credentialsRequired')); return; }
+    if (isRegister && !form.name) { Alert.alert(t('error'), t('nameRequired')); return; }
+    if (isRegister && !selectedWardId) { Alert.alert(t('homeWard'), t('wardRequired')); return; }
 
     setLoading(true);
     try {
@@ -107,29 +108,14 @@ export default function LoginScreen({ navigation }) {
       await setLanguage(data.user?.preferred_language || language);
       await login(data.user, data.token);
     } catch (err) {
-      Alert.alert('Error', err.response?.data?.error || 'Authentication failed');
+      Alert.alert(t('error'), t('authFailed'));
     } finally {
       setLoading(false);
     }
   };
 
   const handleDemo = async () => {
-    setLoading(true);
-    try {
-      const { data } = await api.post('/api/auth/login', { email: 'demo@civicpulse.in', password: 'demo1234' });
-      await setLanguage(data.user?.preferred_language || language);
-      await login(data.user, data.token);
-    } catch {
-      try {
-        const { data } = await api.post('/api/auth/register', { name: 'Demo Citizen', email: 'demo@civicpulse.in', password: 'demo1234', preferred_language: language });
-        await setLanguage(data.user?.preferred_language || language);
-        await login(data.user, data.token);
-      } catch (e) {
-        Alert.alert('Error', 'Demo login failed. Check backend connection.');
-      }
-    } finally {
-      setLoading(false);
-    }
+    navigation.navigate('Explore');
   };
 
   const handleGoogle = async () => {
@@ -137,7 +123,33 @@ export default function LoginScreen({ navigation }) {
       Alert.alert(t('googleNeedsSetup'), t('googleNeedsSetupCopy'));
       return;
     }
-    Alert.alert(t('googleNeedsSetup'), t('googleNeedsSetupCopy'));
+    if (Platform.OS !== 'android') {
+      Alert.alert(t('googleUnavailable'), t('googleNeedsSetupCopy'));
+      return;
+    }
+    setLoading(true);
+    try {
+      const { GoogleSignin } = await import('@react-native-google-signin/google-signin');
+      GoogleSignin.configure({ webClientId: googleClientId, offlineAccess: false });
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const result = await GoogleSignin.signIn();
+      if (result.type === 'cancelled') return;
+      const credential = result.data?.idToken;
+      if (!credential) throw new Error(t('googleTokenMissing'));
+      const { data } = await api.post('/api/auth/social', { provider: 'google', id_token: credential, preferred_language: language, home_ward_id: selectedWardId || undefined });
+      await setLanguage(data.user?.preferred_language || language);
+      await login(data.user, data.token);
+    } catch (error) {
+      if (error.response?.data?.code === 'WARD_REQUIRED') {
+        setMode('email');
+        setIsRegister(true);
+        Alert.alert(t('homeWard'), t('googleChooseWard'));
+      } else if (error.code !== 'SIGN_IN_CANCELLED' && error.code !== 'IN_PROGRESS') {
+        Alert.alert(t('error'), error.response?.data?.error || t('googleSignInFailed'));
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleForgotPassword = async () => {
@@ -337,14 +349,14 @@ export default function LoginScreen({ navigation }) {
               <Text style={styles.btnOutlineTxt}>{loading ? 'Loading…' : `⚡  ${t('quickDemo')}`}</Text>
             </TouchableOpacity>
             <LanguagePicker />
-            <Text style={styles.terms}>By continuing you agree to our Terms of Service</Text>
+            <TouchableOpacity onPress={() => Linking.openURL('https://civicspulse.in/privacy')}><Text style={styles.terms}>{t('privacyNotice')}</Text></TouchableOpacity>
           </View>
         )}
 
         {mode === 'email' && (
           <View style={styles.form}>
             <TouchableOpacity onPress={() => setMode('landing')} style={styles.backRow}>
-              <Text style={styles.backTxt}>← Back</Text>
+              <Text style={styles.backTxt}>← {t('back')}</Text>
               <Text style={styles.formTitle}>{isRegister ? t('createAccount') : t('signIn')}</Text>
             </TouchableOpacity>
 
@@ -361,26 +373,26 @@ export default function LoginScreen({ navigation }) {
             {!!form.password && (
               <TouchableOpacity style={styles.showPasswordRow} onPress={() => setShowPassword((value) => !value)}>
                 <Text style={styles.checkBox}>{showPassword ? '☑' : '☐'}</Text>
-                <Text style={styles.showPasswordText}>Show password</Text>
+                <Text style={styles.showPasswordText}>{t('showPassword')}</Text>
               </TouchableOpacity>
             )}
 
             {isRegister && (
               <View style={styles.wardBox}>
                 <View style={styles.wardHeader}>
-                  <Text style={styles.wardTitle}>Ward / zone number</Text>
+                  <Text style={styles.wardTitle}>{t('wardZone')}</Text>
                   <TouchableOpacity onPress={detectWard} disabled={locatingWard}>
-                    <Text style={styles.wardLocate}>{locatingWard ? 'Detecting…' : 'Use location'}</Text>
+                    <Text style={styles.wardLocate}>{locatingWard ? t('detecting') : t('useLocation')}</Text>
                   </TouchableOpacity>
                 </View>
                 {!!selectedWard && (
                   <Text style={styles.selectedWardText}>
-                    Selected {selectedWard.name} {[selectedWard.ward_number, selectedWard.city].filter(Boolean).join(' · ')}
+                    {selectedWard.name} {[selectedWard.ward_number, selectedWard.city].filter(Boolean).join(' · ')}
                   </Text>
                 )}
                 <TextInput
                   style={styles.input}
-                  placeholder={wardsLoading ? 'Loading wards…' : 'Search ward, zone, city'}
+                  placeholder={wardsLoading ? t('loadingWards') : t('searchWards')}
                   placeholderTextColor={colors.text3}
                   value={wardSearch}
                   onChangeText={setWardSearch}
@@ -398,7 +410,7 @@ export default function LoginScreen({ navigation }) {
                       </Text>
                     </TouchableOpacity>
                   ))}
-                  {!wardsLoading && !wardOptions.length && <Text style={styles.helpTxt}>No wards found. Try another city or ask admin to import data.</Text>}
+                  {!wardsLoading && !wardOptions.length && <Text style={styles.helpTxt}>{t('noWards')}</Text>}
                 </View>
               </View>
             )}

@@ -18,7 +18,7 @@ export default function HomeScreen({ navigation }) {
   const [trackingCode, setTrackingCode] = useState('');
   const [tracking, setTracking] = useState(false);
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, isRefetching, refetch } = useQuery({
     queryKey: ['feed', language, filter, user?.id, user?.home_ward_id],
     queryFn: () => api.get('/api/feed/home', { params: {
       sort: SORT_MAP[filter],
@@ -52,21 +52,22 @@ export default function HomeScreen({ navigation }) {
   }), [rawIssues]);
 
   const hr = new Date().getHours();
-  const greeting = hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
-  const homeWardName = user?.home_ward?.name || user?.home_ward?.ward_number || rawIssues[0]?.wards?.name || 'Set your ward';
+  const greeting = hr < 12 ? t('goodMorning') : hr < 17 ? t('goodAfternoon') : t('goodEvening');
+  const homeWardName = user?.home_ward?.name || user?.home_ward?.ward_number || rawIssues[0]?.wards?.name || t('setWard');
   const filterLabel = (item) => {
     if (item === 'Trending') return `🔥 ${t('trending')}`;
     if (item === 'All') return t('all');
     if (item === 'Escalated') return t('escalated');
     if (item === 'Resolved') return t('resolved');
-    if (item === 'My Escalated') return 'My Esc.';
+    if (item === 'My Escalated') return t('myEscalated');
+    if (item === 'My Issues') return t('myIssues');
     return item;
   };
 
   const trackIssue = async () => {
     const code = trackingCode.trim().toUpperCase();
     if (!code) {
-      Alert.alert('Tracking ID', 'Enter a CivicsPulse issue ID.');
+      Alert.alert(t('trackingId'), t('enterTrackingId'));
       return;
     }
     setTracking(true);
@@ -75,7 +76,7 @@ export default function HomeScreen({ navigation }) {
       setTrackingCode('');
       openIssue(response.issue.id);
     } catch (err) {
-      Alert.alert('Issue not found', err.response?.data?.error || 'Check the tracking ID and try again.');
+      Alert.alert(t('issueNotFound'), t('trackingFailed'));
     } finally {
       setTracking(false);
     }
@@ -102,15 +103,15 @@ export default function HomeScreen({ navigation }) {
       <View style={styles.statsRow}>
         <View style={styles.statTile}>
           <Text style={styles.statValue}>{stats.total}</Text>
-          <Text style={styles.statLabel}>Reports</Text>
+          <Text style={styles.statLabel}>{t('reports')}</Text>
         </View>
         <View style={styles.statTile}>
           <Text style={styles.statValue}>{stats.escalated}</Text>
-          <Text style={styles.statLabel}>Escalated</Text>
+          <Text style={styles.statLabel}>{t('escalated')}</Text>
         </View>
         <View style={styles.statTile}>
           <Text style={styles.statValue}>{stats.resolved}</Text>
-          <Text style={styles.statLabel}>Resolved</Text>
+          <Text style={styles.statLabel}>{t('resolved')}</Text>
         </View>
       </View>
 
@@ -133,7 +134,7 @@ export default function HomeScreen({ navigation }) {
       </View>
 
       <View style={styles.trackBox}>
-        <Text style={styles.trackTitle}>Track by issue ID</Text>
+        <Text style={styles.trackTitle}>{t('trackingId')}</Text>
         <View style={styles.trackRow}>
           <TextInput
             style={styles.trackInput}
@@ -144,7 +145,7 @@ export default function HomeScreen({ navigation }) {
             autoCapitalize="characters"
           />
           <TouchableOpacity style={styles.trackButton} onPress={trackIssue} disabled={tracking}>
-            <Text style={styles.trackButtonText}>{tracking ? '...' : 'Track'}</Text>
+            <Text style={styles.trackButtonText}>{tracking ? '...' : t('track')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -183,15 +184,15 @@ export default function HomeScreen({ navigation }) {
           />
         )}
         contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.accent} />}
+        refreshControl={<RefreshControl refreshing={isLoading || isRefetching} onRefresh={refetch} tintColor={colors.accent} />}
         ListEmptyComponent={!isLoading && (
           <View style={{ alignItems: 'center', padding: 40 }}>
             <Text style={{ fontSize: 36, marginBottom: 12 }}>🏙️</Text>
             <Text style={{ color: colors.text3, textAlign: 'center' }}>
-              {user?.home_ward_id ? t('noWardIssues') : t('noIssues')}
+              {isError ? t('networkError') : user?.home_ward_id ? t('noWardIssues') : t('noIssues')}
             </Text>
-            <TouchableOpacity style={styles.emptyAction} onPress={() => navigation.navigate('Create')}>
-              <Text style={styles.emptyActionText}>Raise first issue</Text>
+            <TouchableOpacity style={styles.emptyAction} onPress={() => isError ? refetch() : navigation.navigate('Create')}>
+              <Text style={styles.emptyActionText}>{isError ? t('refresh') : t('raiseIssue')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -204,7 +205,7 @@ const styles = StyleSheet.create({
   container:   { flex: 1, backgroundColor: colors.bg },
   header:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 18, paddingTop: 56 },
   greeting:    { fontSize: 11, color: colors.text3 },
-  title:       { fontSize: 22, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
+  title:       { fontSize: 22, fontWeight: '800', color: colors.text, letterSpacing: 0 },
   wardLine:    { color: colors.text2, fontSize: 12, marginTop: 4 },
   avatar:      { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.fire, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   avatarImage: { width: '100%', height: '100%' },

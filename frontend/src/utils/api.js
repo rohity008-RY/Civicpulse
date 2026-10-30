@@ -20,9 +20,8 @@ api.interceptors.request.use(config => {
 api.interceptors.response.use(
   res => res,
   err => {
-    if (err.response?.status === 401) {
+    if (err.response?.status === 401 && useAuthStore.getState().token && !['/api/auth/login', '/api/auth/social', '/api/auth/reset-password'].includes(err.config?.url)) {
       useAuthStore.getState().logout();
-      window.location.href = '/login';
     }
     return Promise.reject(err);
   }

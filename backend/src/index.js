@@ -24,6 +24,8 @@ const { startTrendingJob }   = require('./services/trendingJob');
 const logger = require('./utils/logger');
 
 const app = express();
+// Render's public traffic passes through Cloudflare and its load balancer.
+if (process.env.RENDER === 'true') app.set('trust proxy', 2);
 
 // ─── Security & Middleware ────────────────────────────────────
 app.use(helmet());
@@ -40,7 +42,7 @@ app.use(morgan('combined', { stream: { write: msg => logger.info(msg.trim()) } }
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200 });
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
 app.use('/api/', limiter);
-app.use('/api/auth', authLimiter);
+app.use(['/api/auth/register', '/api/auth/login', '/api/auth/social', '/api/auth/forgot-password', '/api/auth/reset-password'], authLimiter);
 
 // ─── Health Check ─────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({

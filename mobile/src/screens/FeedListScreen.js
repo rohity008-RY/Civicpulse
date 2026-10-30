@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, FlatList, StyleSheet, RefreshControl } from 'react-native';
+import { View, Text, FlatList, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import api from '../utils/api';
 import IssueCard from '../components/IssueCard';
@@ -7,6 +7,7 @@ import { useT } from '../utils/i18n';
 import { colors } from '../utils/theme';
 
 const CONFIG = {
+  explore: { endpoint: '/api/feed/home', params: { limit: 30 }, emptyIcon: '📍', subtitle: '' },
   escalated: {
     title: 'Escalated Issues',
     subtitle: 'Reports that missed SLA or need higher attention',
@@ -32,7 +33,7 @@ function openIssue(navigation, id) {
 export default function FeedListScreen({ navigation, mode = 'trending' }) {
   const config = CONFIG[mode] || CONFIG.trending;
   const { t, language } = useT();
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, isRefetching, refetch } = useQuery({
     queryKey: ['feed-list', language, mode],
     queryFn: () => api.get(config.endpoint, { params: config.params }).then((r) => r.data),
   });
@@ -42,8 +43,9 @@ export default function FeedListScreen({ navigation, mode = 'trending' }) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>{mode === 'escalated' ? t('escalated') : t('trending')}</Text>
-        <Text style={styles.subtitle}>{config.subtitle}</Text>
+        {mode === 'explore' && <TouchableOpacity onPress={() => navigation.goBack()}><Text style={styles.subtitle}>{t('back')}</Text></TouchableOpacity>}
+        <Text style={styles.title}>{mode === 'explore' ? t('yourWardFeed') : mode === 'escalated' ? t('escalated') : t('trending')}</Text>
+        <Text style={styles.subtitle}>{mode === 'escalated' ? t('escalatedCopy') : mode === 'explore' ? t('exploreCopy') : t('trendingCopy')}</Text>
       </View>
 
       <FlatList
@@ -53,12 +55,12 @@ export default function FeedListScreen({ navigation, mode = 'trending' }) {
           <IssueCard issue={item} onUpvote={refetch} onPress={() => openIssue(navigation, item.id)} />
         )}
         contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.accent} />}
+        refreshControl={<RefreshControl refreshing={isLoading || isRefetching} onRefresh={refetch} tintColor={colors.accent} />}
         ListEmptyComponent={!isLoading && (
           <View style={styles.empty}>
             <Text style={{ fontSize: 36 }}>{config.emptyIcon}</Text>
-            <Text style={styles.emptyTitle}>{t('noIssues')}</Text>
-            <Text style={styles.emptyText}>New reports will appear here automatically.</Text>
+            <Text style={styles.emptyTitle}>{isError ? t('networkError') : t('noIssues')}</Text>
+            {isError && <TouchableOpacity onPress={() => refetch()}><Text style={styles.emptyText}>{t('refresh')}</Text></TouchableOpacity>}
           </View>
         )}
       />

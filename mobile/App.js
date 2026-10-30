@@ -33,6 +33,10 @@ function TrendingScreen(props) {
   return <FeedListScreen {...props} mode="trending" />;
 }
 
+function ExploreScreen(props) {
+  return <FeedListScreen {...props} mode="explore" />;
+}
+
 function TabIcon({ name, focused }) {
   return (
     <View style={{ alignItems: 'center' }}>
@@ -48,6 +52,7 @@ function TabNavigator() {
   const isRep = ['CORPORATOR', 'MLA', 'MP'].includes(user?.role);
   return (
     <Tab.Navigator
+      initialRouteName={user?.home_ward_id ? 'Home' : 'Profile'}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarIcon: ({ focused }) => <TabIcon name={route.name} focused={focused} />,
@@ -84,6 +89,7 @@ function AppNavigator() {
         {!isAuthenticated ? (
           <>
             <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Explore" component={ExploreScreen} />
             <Stack.Screen name="IssueDetail" component={IssueDetailScreen} />
           </>
         ) : (

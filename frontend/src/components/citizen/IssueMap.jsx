@@ -4,6 +4,7 @@ import { LocateFixed, Maximize2 } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { statusLabel, useT } from '../../utils/i18n';
+import { citizenText } from './copy';
 
 export const hasCoordinates = point => point?.lat !== null && point?.lng !== null
   && point?.lat !== '' && point?.lng !== '' && Number.isFinite(Number(point?.lat))
@@ -16,7 +17,8 @@ export default function IssueMap({ points = [], selected, onPick, className = ''
   const pick = useRef(onPick);
   const [tileError, setTileError] = useState(false);
   const navigate = useNavigate();
-  const { language } = useT();
+  const { language, t } = useT();
+  const c = citizenText(language);
   pick.current = onPick;
 
   useEffect(() => {
@@ -82,12 +84,12 @@ export default function IssueMap({ points = [], selected, onPick, className = ''
 
   return (
     <div className={`civic-real-map ${className}`} style={{ height }}>
-      <div ref={container} className="civic-map-canvas" role="region" aria-label="Map of civic reports" />
+      <div ref={container} className="civic-map-canvas" role="region" aria-label={c.map} />
       <div className="civic-map-tools">
-        <button type="button" onClick={fit} title="Show all report locations" aria-label="Show all report locations"><Maximize2 size={17} /></button>
-        <button type="button" onClick={locate} title="Use my location" aria-label="Use my location"><LocateFixed size={17} /></button>
+        <button type="button" onClick={fit} title={c.map} aria-label={c.map}><Maximize2 size={17} /></button>
+        <button type="button" onClick={locate} title={t('useLocation')} aria-label={t('useLocation')}><LocateFixed size={17} /></button>
       </div>
-      {tileError && <div className="map-service-notice" role="status">{tileError === 'location' ? 'Location unavailable. Search for your ward instead.' : 'Map tiles are unavailable. You can still browse the report list.'}</div>}
+      {tileError && <div className="map-service-notice" role="status">{c.tryAgain} {tileError === 'location' ? c.chooseWard : c.listView}</div>}
     </div>
   );
 }

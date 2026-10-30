@@ -1,4 +1,5 @@
 import { LANGUAGES, useLanguageStore } from '../store/languageStore';
+import { onboardingCopy } from './onboardingCopy';
 
 const en = {
   feed: 'Feed',
@@ -297,7 +298,7 @@ Object.assign(dictionaries.ta, {
 });
 
 export function translate(language, key, values = {}) {
-  const value = dictionaries[language]?.[key] || en[key] || key;
+  const value = onboardingCopy[language]?.[key] || dictionaries[language]?.[key] || onboardingCopy.en[key] || en[key] || key;
   return Object.entries(values).reduce((text, [name, replacement]) => (
     text.replace(new RegExp(`{${name}}`, 'g'), String(replacement))
   ), value);

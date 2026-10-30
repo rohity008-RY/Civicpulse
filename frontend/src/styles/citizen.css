@@ -58,6 +58,10 @@ button:focus-visible, a:focus-visible { outline: 3px solid #65adf0; outline-offs
 .citizen-overview > a { display: flex; align-items: center; gap: 7px; margin-left: auto; color: #087866; font-size: 12px; font-weight: 700; }
 .citizen-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 36px; align-items: start; }
 .citizen-feed-column, .citizen-sidebar { min-width: 0; }
+.privacy-notice { max-width: 800px; padding-bottom: 60px; }
+.privacy-notice h1 { font-size: 32px; }
+.privacy-notice h2 { font-size: 20px; margin-top: 28px; }
+.privacy-notice p { line-height: 1.75; overflow-wrap: anywhere; }
 .citizen-feed-tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--line); margin-bottom: 20px; overflow-x: auto; scrollbar-width: none; }
 .citizen-feed-tabs > button { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; gap: 6px; border: 0; border-bottom: 2px solid transparent; padding: 0 0 14px; background: transparent; color: #75817f; font-size: 13px; font-weight: 600; white-space: nowrap; }
 .citizen-feed-tabs > button.selected { color: #147767; border-bottom-color: #147767; }

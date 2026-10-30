@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { v4: uuidv4 } = require('uuid');
+const { v4: uuidv4, validate: isUuid } = require('uuid');
 const supabase = require('../config/supabase');
 const { authenticate } = require('../middleware/auth');
 const multer = require('multer');
@@ -10,8 +10,7 @@ const { normalizeLanguage } = require('../services/languageService');
 const { verifyGoogleIdToken } = require('../services/googleAuthService');
 const {
   createPasswordReset,
-  consumePasswordReset,
-  markPasswordResetUsed,
+  completePasswordReset,
   sendPasswordResetEmail,
   shouldReturnResetUrl,
 } = require('../services/passwordResetService');
@@ -22,28 +21,40 @@ const avatarUpload = multer({
 });
 
 const signToken = (user) => jwt.sign(
-  { sub: user.id, role: user.role, rep_id: user.rep_id || null },
+  { sub: user.id, role: user.role, rep_id: user.rep_id || null, av: user.session_version || 0 },
   process.env.JWT_SECRET,
   { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
 );
 
 const normalizeEmail = (email) => (email ? String(email).trim().toLowerCase() : null);
 
+router.get('/config', (req, res) => {
+  res.json({
+    google_web_client_id: process.env.GOOGLE_WEB_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '',
+    password_reset_available: Boolean(process.env.RESEND_API_KEY && process.env.PASSWORD_RESET_FROM_EMAIL),
+  });
+});
+
 // ─── Register with email/password ────────────────────────────
 router.post('/register', async (req, res) => {
   try {
     const { name, phone, password, preferred_language, home_ward_id } = req.body;
     const email = normalizeEmail(req.body.email);
-    if (!name || (!email && !phone))
+    if (typeof name !== 'string' || !name.trim() || (!email && !phone))
       return res.status(400).json({ error: 'Name and email or phone required' });
-    if (!password || String(password).length < 8)
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Enter a valid email' });
+    if (typeof password !== 'string' || password.length < 8)
       return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    if (!home_ward_id || !isUuid(home_ward_id)) return res.status(400).json({ error: 'Select a valid home ward' });
 
     const hash = await bcrypt.hash(password, 10);
 
-    const { data: existing } = await supabase.from('users')
-      .select('id').or(`email.eq.${email},phone.eq.${phone}`).maybeSingle();
-    if (existing) return res.status(409).json({ error: 'Account already exists' });
+    for (const [field, value] of [['email', email], ['phone', phone]]) {
+      if (!value) continue;
+      const { data: existing, error: lookupError } = await supabase.from('users').select('id').eq(field, value).maybeSingle();
+      if (lookupError) throw lookupError;
+      if (existing) return res.status(409).json({ error: 'Account already exists' });
+    }
 
     let homeWardId = null;
     if (home_ward_id) {
@@ -58,7 +69,7 @@ router.post('/register', async (req, res) => {
     }
 
     const { data: user, error } = await supabase.from('users').insert({
-      id: uuidv4(), name, email, phone,
+      id: uuidv4(), name: name.trim(), email, phone: phone || null,
       password_hash: hash,
       role: 'CITIZEN',
       email_verified: false,
@@ -67,6 +78,7 @@ router.post('/register', async (req, res) => {
       is_active: true
     }).select('*, wards(id, name, ward_number, city, state_name, zone_id)').single();
 
+    if (error?.code === '23505') return res.status(409).json({ error: 'Account already exists' });
     if (error) throw error;
 
     res.status(201).json({ token: signToken(user), user: sanitizeUser(user) });
@@ -82,6 +94,7 @@ router.post('/login', async (req, res) => {
     const email = normalizeEmail(req.body.email);
     if (!email && !phone)
       return res.status(400).json({ error: 'Email or phone required' });
+    if (typeof password !== 'string' || !password) return res.status(400).json({ error: 'Password is required' });
 
     const query = supabase.from('users').select('*');
     if (email) query.eq('email', email);
@@ -122,8 +135,16 @@ router.post('/social', async (req, res) => {
     }
 
     const googleUser = await verifyGoogleIdToken(id_token);
-    let { data: user } = await supabase.from('users')
+    if (home_ward_id && !isUuid(home_ward_id)) return res.status(400).json({ error: 'Invalid home_ward_id' });
+    if (home_ward_id) {
+      const { data: ward, error: wardError } = await supabase.from('wards').select('id').eq('id', home_ward_id).maybeSingle();
+      if (wardError) throw wardError;
+      if (!ward) return res.status(400).json({ error: 'Invalid home_ward_id' });
+    }
+    let { data: user, error: socialLookupError } = await supabase.from('users')
       .select('*').eq('social_provider', 'google').eq('social_uid', googleUser.uid).maybeSingle();
+    if (socialLookupError) throw socialLookupError;
+    if (user && !user.is_active) return res.status(403).json({ error: 'Account suspended' });
 
     if (!user) {
       const { data: emailUser, error: emailLookupError } = await supabase
@@ -134,6 +155,8 @@ router.post('/social', async (req, res) => {
       if (emailLookupError) throw emailLookupError;
 
       if (emailUser) {
+        if (!emailUser.is_active) return res.status(403).json({ error: 'Account suspended' });
+        if (emailUser.social_uid && emailUser.social_uid !== googleUser.uid) return res.status(409).json({ error: 'Sign in with the Google account already linked to this profile' });
         const { data: linkedUser, error: linkError } = await supabase.from('users')
           .update({
             social_provider: 'google',
@@ -147,6 +170,7 @@ router.post('/social', async (req, res) => {
         if (linkError) throw linkError;
         user = linkedUser;
       } else {
+        if (!home_ward_id) return res.status(422).json({ error: 'Select your ward before creating a Google account', code: 'WARD_REQUIRED' });
         const { data: newUser, error } = await supabase.from('users').insert({
           id: uuidv4(),
           name: googleUser.name,
@@ -157,6 +181,7 @@ router.post('/social', async (req, res) => {
           email_verified: true,
           role: 'CITIZEN',
           preferred_language: normalizeLanguage(preferred_language),
+          home_ward_id,
           is_active: true,
         }).select().single();
         if (error) throw error;
@@ -195,11 +220,14 @@ router.post('/social', async (req, res) => {
 router.post('/forgot-password', async (req, res) => {
   try {
     const email = normalizeEmail(req.body.email);
-    if (!email) return res.status(400).json({ error: 'Email is required' });
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'A valid email is required' });
+    if (!(process.env.RESEND_API_KEY && process.env.PASSWORD_RESET_FROM_EMAIL) && !shouldReturnResetUrl()) {
+      return res.status(503).json({ error: 'Password-reset emails are temporarily unavailable. Please try again later.' });
+    }
 
     const genericResponse = {
       ok: true,
-      message: 'If an account exists, a reset link has been sent.',
+      message: 'If an active account exists, you will receive a password-reset email.',
       email_configured: Boolean(process.env.RESEND_API_KEY && process.env.PASSWORD_RESET_FROM_EMAIL),
     };
 
@@ -212,17 +240,13 @@ router.post('/forgot-password', async (req, res) => {
     if (!user || !user.is_active) return res.json(genericResponse);
 
     const reset = await createPasswordReset(user.id);
-    const emailResult = await sendPasswordResetEmail({
+    await sendPasswordResetEmail({
       to: user.email,
       name: user.name,
       resetUrl: reset.reset_url,
     });
 
-    const response = {
-      ...genericResponse,
-      email_configured: emailResult.sent,
-      expires_at: reset.expires_at,
-    };
+    const response = { ...genericResponse };
     if (shouldReturnResetUrl()) response.reset_url = reset.reset_url;
     res.json(response);
   } catch (err) {
@@ -235,22 +259,20 @@ router.post('/reset-password', async (req, res) => {
   try {
     const { token, password } = req.body;
     if (!token) return res.status(400).json({ error: 'Reset token is required' });
-    if (!password || String(password).length < 8) {
+    if (typeof password !== 'string' || password.length < 8) {
       return res.status(400).json({ error: 'Password must be at least 8 characters' });
     }
 
-    const resetRow = await consumePasswordReset(token);
     const hash = await bcrypt.hash(password, 10);
+    const userId = await completePasswordReset(token, hash);
 
     const { data: user, error } = await supabase
       .from('users')
-      .update({ password_hash: hash, last_active_at: new Date() })
-      .eq('id', resetRow.user_id)
       .select('*')
+      .eq('id', userId)
       .single();
     if (error) throw error;
 
-    await markPasswordResetUsed(resetRow.id);
     res.json({ ok: true, token: signToken(user), user: sanitizeUser(user) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || 'Password reset failed' });

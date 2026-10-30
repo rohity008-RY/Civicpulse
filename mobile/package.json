@@ -1,6 +1,6 @@
 {
   "name": "civicpulse-mobile",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
@@ -13,6 +13,7 @@
     "submit:android": "eas submit --platform android"
   },
   "dependencies": {
+    "@react-native-google-signin/google-signin": "^13.2.0",
     "@react-navigation/bottom-tabs": "^6.5.12",
     "@react-navigation/native": "^6.1.10",
     "@react-navigation/native-stack": "^6.9.18",

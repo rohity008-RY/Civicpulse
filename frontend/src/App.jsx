@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { formatDistanceToNow } from 'date-fns';
+import { timeAgo } from './utils/date';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
   AlertTriangle,
@@ -50,6 +50,7 @@ import { useAuthStore } from './store/authStore';
 import { normalizeLanguage, useLanguageStore } from './store/languageStore';
 import { categoryLabel, statusLabel, useT } from './utils/i18n';
 import CitizenHome, { CitizenUpdates } from './components/citizen/CitizenHome';
+import PrivacyNotice from './components/PrivacyNotice';
 import IssueActions from './components/citizen/IssueActions';
 import { citizenText } from './components/citizen/copy';
 const IssueMap = lazy(() => import('./components/citizen/IssueMap'));
@@ -384,7 +385,7 @@ function LanguageSelect({ label = false, className = '' }) {
       updateUser(response.data.user);
       queryClient.invalidateQueries();
     },
-    onError: () => toast.error('Could not save language preference'),
+    onError: () => toast.error(t('profileUpdateFailed')),
   });
 
   const changeLanguage = (event) => {
@@ -475,6 +476,7 @@ function NotificationCenter() {
 }
 
 function SeoFooter() {
+  const { t } = useT();
   const priorityLinks = [
     ['Mumbai civic reporting', '/mumbai'],
     ['Public issue tracker', '/public-issues'],
@@ -491,6 +493,7 @@ function SeoFooter() {
       <div>
         <strong>{BRAND_NAME}</strong>
         <p>Mumbai civic reporting, ward issue tracking, and representative mapping for citizens.</p>
+        <Link to="/privacy">{t('privacyNotice')}</Link>
       </div>
       <nav aria-label="SEO discovery links">
         <section>
@@ -788,6 +791,7 @@ function CivicPulseMapPanel() {
 
 function TrackIssueBox() {
   const navigate = useNavigate();
+  const { t } = useT();
   const [trackingCode, setTrackingCode] = useState('');
 
   const trackIssue = useMutation({
@@ -807,8 +811,8 @@ function TrackIssueBox() {
   return (
     <section className="track-box">
       <div>
-        <p className="eyebrow">Track report</p>
-        <h2>Find any issue by ID</h2>
+        <p className="eyebrow">{t('trackingId')}</p>
+        <h2>{t('enterTrackingId')}</h2>
       </div>
       <form
         onSubmit={(event) => {
@@ -824,7 +828,7 @@ function TrackIssueBox() {
         />
         <button className="button primary" type="submit" disabled={trackIssue.isPending}>
           {trackIssue.isPending ? <Loader2 size={17} className="spin" /> : <Search size={17} />}
-          Track
+          {t('track')}
         </button>
       </form>
     </section>
@@ -833,6 +837,7 @@ function TrackIssueBox() {
 
 function PublicIssueTracker({ compact = false }) {
   const navigate = useNavigate();
+  const { t } = useT();
   const [trackingCode, setTrackingCode] = useState('');
   const tracker = useMutation({
     mutationFn: async () => {
@@ -851,9 +856,9 @@ function PublicIssueTracker({ compact = false }) {
   return (
     <section className={`public-tracker ${compact ? 'compact' : ''}`}>
       <div>
-        <p className="eyebrow">Public tracking</p>
-        <h2>Track any report without login</h2>
-        <p>Use your public CivicsPulse ID to see status, representative mapping, and timeline.</p>
+        <p className="eyebrow">{t('trackingId')}</p>
+        <h2>{t('enterTrackingId')}</h2>
+        <p>{t('timeline')} · {t('mappedReps')}</p>
       </div>
       <form
         onSubmit={(event) => {
@@ -869,7 +874,7 @@ function PublicIssueTracker({ compact = false }) {
         />
         <button className="button primary" type="submit" disabled={tracker.isPending}>
           {tracker.isPending ? <Loader2 size={17} className="spin" /> : <Search size={17} />}
-          Track
+          {t('track')}
         </button>
       </form>
     </section>
@@ -1096,7 +1101,7 @@ function CitizenPage({ mode }) {
 function HeadlineCard({ issue, kind = 'latest' }) {
   const reduced = useReducedMotion();
   const { language } = useT();
-  const created = issue.created_at ? formatDistanceToNow(new Date(issue.created_at), { addSuffix: true }) : '';
+  const created = issue.created_at ? timeAgo(issue.created_at, language) : '';
   const label = kind === 'trending'
     ? 'Trending'
     : kind === 'escalated'
@@ -1587,7 +1592,7 @@ function IssueCard({ issue, onRefresh }) {
   const { isAuthenticated } = useAuthStore();
   const { t, language } = useT();
   const status = statusLabel(language, issue.status);
-  const created = issue.created_at ? formatDistanceToNow(new Date(issue.created_at), { addSuffix: true }) : '';
+  const created = issue.created_at ? timeAgo(issue.created_at, language) : '';
   const isEscalated = Boolean(issue.escalated_at);
 
   const upvote = useMutation({
@@ -1671,6 +1676,8 @@ function AuthPanel({ compact = false, redirectTo = '/raise', initialMode = 'regi
   const [locatingWard, setLocatingWard] = useState(false);
   const [resetInfo, setResetInfo] = useState(null);
   const googleButtonRef = useRef(null);
+  const authConfig = useQuery({ queryKey: ['auth-config'], queryFn: () => api.get('/api/auth/config').then(result => result.data), staleTime: 60000 });
+  const googleClientId = GOOGLE_CLIENT_ID || authConfig.data?.google_web_client_id || '';
 
   const locations = useQuery({
     queryKey: ['signup-locations'],
@@ -1686,7 +1693,7 @@ function AuthPanel({ compact = false, redirectTo = '/raise', initialMode = 'regi
     login(data.user, data.token);
     setLanguage(data.user?.preferred_language || language);
     toast.success(message);
-    navigate(redirectTo);
+    navigate(data.user?.home_ward_id ? redirectTo : '/profile');
   };
 
   const auth = useMutation({
@@ -1701,7 +1708,7 @@ function AuthPanel({ compact = false, redirectTo = '/raise', initialMode = 'regi
     onSuccess: (data) => {
       finishAuth(data, mode === 'register' ? t('accountCreated') : t('signedIn'));
     },
-    onError: (error) => toast.error(error.response?.data?.error || t('authFailed')),
+    onError: () => toast.error(t('authFailed')),
   });
 
   const googleAuth = useMutation({
@@ -1710,11 +1717,15 @@ function AuthPanel({ compact = false, redirectTo = '/raise', initialMode = 'regi
         provider: 'google',
         id_token: credential,
         preferred_language: language,
+        home_ward_id: selectedWardId || undefined,
       });
       return data;
     },
     onSuccess: (data) => finishAuth(data, t('signedIn')),
-    onError: (error) => toast.error(error.response?.data?.error || t('googleSignInFailed')),
+    onError: (error) => {
+      if (error.response?.data?.code === 'WARD_REQUIRED') { setMode('register'); toast.error(t('googleChooseWard')); }
+      else toast.error(error.response?.data?.error || t('googleSignInFailed'));
+    },
   });
 
   const forgotPassword = useMutation({
@@ -1726,11 +1737,11 @@ function AuthPanel({ compact = false, redirectTo = '/raise', initialMode = 'regi
       setResetInfo(data);
       toast.success(t('resetLinkSent'));
     },
-    onError: (error) => toast.error(error.response?.data?.error || t('resetRequestFailed')),
+    onError: () => toast.error(t('resetRequestFailed')),
   });
 
   useEffect(() => {
-    if (!GOOGLE_CLIENT_ID || !googleButtonRef.current || mode === 'forgot') return undefined;
+    if (!googleClientId || !googleButtonRef.current || mode === 'forgot') return undefined;
 
     let cancelled = false;
     const target = googleButtonRef.current;
@@ -1740,7 +1751,7 @@ function AuthPanel({ compact = false, redirectTo = '/raise', initialMode = 'regi
       .then(() => {
         if (cancelled || !window.google?.accounts?.id) return;
         window.google.accounts.id.initialize({
-          client_id: GOOGLE_CLIENT_ID,
+          client_id: googleClientId,
           callback: (response) => {
             if (response?.credential) googleAuth.mutate(response.credential);
           },
@@ -1762,7 +1773,7 @@ function AuthPanel({ compact = false, redirectTo = '/raise', initialMode = 'regi
       cancelled = true;
       target.innerHTML = '';
     };
-  }, [mode, language]);
+  }, [mode, language, googleClientId]);
 
   const submitAuth = (event) => {
     event.preventDefault();
@@ -1771,7 +1782,7 @@ function AuthPanel({ compact = false, redirectTo = '/raise', initialMode = 'regi
       return;
     }
     if (mode === 'register' && !selectedWardId) {
-      toast.error('Select your ward or use current location before creating account');
+      toast.error(t('wardRequired'));
       return;
     }
     auth.mutate();
@@ -1835,7 +1846,7 @@ function AuthPanel({ compact = false, redirectTo = '/raise', initialMode = 'regi
         <LanguageSelect label />
         {mode !== 'forgot' && (
           <div className="auth-social-start">
-            {GOOGLE_CLIENT_ID ? (
+            {googleClientId ? (
               <div className="google-button-wrap prominent" ref={googleButtonRef} aria-label={t('continueWithGoogle')} />
             ) : (
               <button type="button" className="button secondary google-fallback" disabled>
@@ -1846,7 +1857,7 @@ function AuthPanel({ compact = false, redirectTo = '/raise', initialMode = 'regi
             {googleAuth.isPending && (
               <p className="inline-status"><Loader2 size={14} className="spin" /> {t('googleSigningIn')}</p>
             )}
-            <div className="auth-divider"><span>or continue with email</span></div>
+            <div className="auth-divider"><span>{t('continueWithEmail')}</span></div>
           </div>
         )}
         {mode === 'register' && (
@@ -1856,7 +1867,7 @@ function AuthPanel({ compact = false, redirectTo = '/raise', initialMode = 'regi
               required
               value={form.name}
               onChange={(event) => setForm((state) => ({ ...state, name: event.target.value }))}
-              placeholder="Your name"
+              placeholder={t('fullName')}
             />
           </label>
         )}
@@ -1879,37 +1890,38 @@ function AuthPanel({ compact = false, redirectTo = '/raise', initialMode = 'regi
               type={showPassword ? 'text' : 'password'}
               value={form.password}
               onChange={(event) => setForm((state) => ({ ...state, password: event.target.value }))}
-              placeholder="Minimum 8 characters"
+              placeholder={`${t('password')} (8+)`}
             />
             {!!form.password && (
               <span className="password-toggle">
                 <input
                   type="checkbox"
+                  aria-label={t('showPassword')}
                   checked={showPassword}
                   onChange={(event) => setShowPassword(event.target.checked)}
                 />
-                Show password
+                {t('showPassword')}
               </span>
             )}
           </label>
         )}
         {mode === 'register' && (
           <fieldset className="signup-ward-fieldset">
-            <legend>Ward / zone number</legend>
+            <legend>{t('wardZone')}</legend>
             <div className="ward-signup-actions">
               <button className="button secondary" type="button" onClick={useCurrentWard} disabled={locatingWard}>
                 {locatingWard ? <Loader2 size={17} className="spin" /> : <LocateFixed size={17} />}
-                Use current location
+                {t('useLocation')}
               </button>
               {selectedWard && <span className="inline-status success-text">Selected {formatWard(selectedWard)}</span>}
             </div>
             <input
               value={wardSearch}
               onChange={(event) => setWardSearch(event.target.value)}
-              placeholder="Search ward, zone, city, or state"
+              placeholder={t('searchWards')}
             />
             <div className="ward-options compact">
-              {locations.isLoading && <span className="muted-row">Loading wards...</span>}
+              {locations.isLoading && <span className="muted-row">{t('loadingWards')}</span>}
               {!locations.isLoading && locations.isError && <span className="muted-row">Could not load wards. Try again or ask admin to import data.</span>}
               {!locations.isLoading && !locations.isError && visibleWards.map((ward) => (
                 <button
@@ -1923,7 +1935,7 @@ function AuthPanel({ compact = false, redirectTo = '/raise', initialMode = 'regi
                 </button>
               ))}
               {!locations.isLoading && !locations.isError && !visibleWards.length && (
-                <span className="muted-row">No wards found for this search.</span>
+                <span className="muted-row">{t('noWards')}</span>
               )}
             </div>
           </fieldset>
@@ -1970,7 +1982,8 @@ function AuthPanel({ compact = false, redirectTo = '/raise', initialMode = 'regi
 
 function LoginPage() {
   const { isAuthenticated } = useAuthStore();
-  const { t } = useT();
+  const { t, language } = useT();
+  const c = citizenText(language);
   const [searchParams] = useSearchParams();
   const next = searchParams.get('next');
   const redirectTo = next?.startsWith('/') && !next.startsWith('//') ? next : '/';
@@ -1994,9 +2007,9 @@ function LoginPage() {
         >
           <motion.div className="consumer-auth-head" variants={fadeUp}>
             <p className="eyebrow">{t('authEyebrow')}</p>
-            <h1>Your neighbourhood deserves a voice.</h1>
+            <h1>{c.title}</h1>
             <p className="lede">
-              Sign in to report issues, track public timelines, learn what evidence helps, and stay aware of ward-level civic updates.
+              {c.subtitle}
             </p>
           </motion.div>
 
@@ -2014,9 +2027,9 @@ function LoginPage() {
           <div className="auth-welcome-card">
             <img src="/icon.png" alt="" />
             <div>
-              <p className="eyebrow">Get started</p>
-              <h2>Join CivicsPulse</h2>
-              <span>Choose language, sign in with Google or email, and map your ward during signup.</span>
+              <p className="eyebrow">{t('citizenPortal')}</p>
+              <h2>CivicsPulse</h2>
+              <span>{t('wardRequired')}</span>
             </div>
           </div>
           <AuthPanel initialMode="login" redirectTo={redirectTo} />
@@ -2084,7 +2097,7 @@ function ResetPasswordPage() {
                   type={showPassword ? 'text' : 'password'}
                   value={form.password}
                   onChange={(event) => setForm((state) => ({ ...state, password: event.target.value }))}
-                  placeholder="Minimum 8 characters"
+                  placeholder={`${t('password')} (8+)`}
                 />
               </label>
               <label>
@@ -2101,10 +2114,11 @@ function ResetPasswordPage() {
                   <span className="password-toggle">
                     <input
                       type="checkbox"
+                      aria-label={t('showPassword')}
                       checked={showPassword}
                       onChange={(event) => setShowPassword(event.target.checked)}
                     />
-                    Show password
+                    {t('showPassword')}
                   </span>
                 )}
               </label>
@@ -2538,7 +2552,7 @@ function RaiseIssuePage() {
                 placeholder="Search ward, city, or state"
               />
               <div className="ward-options">
-                {locations.isLoading && <span className="muted-row">Loading wards...</span>}
+                {locations.isLoading && <span className="muted-row">{t('loadingWards')}</span>}
                 {!locations.isLoading && locations.isError && <span className="muted-row">Could not load wards. You can still submit with GPS.</span>}
                 {!locations.isLoading && !locations.isError && visibleWards.map((ward) => (
                   <button
@@ -2555,7 +2569,7 @@ function RaiseIssuePage() {
                   </button>
                 ))}
                 {!locations.isLoading && !locations.isError && !visibleWards.length && (
-                  <span className="muted-row">No wards found for this search.</span>
+                  <span className="muted-row">{t('noWards')}</span>
                 )}
               </div>
             </fieldset>
@@ -2772,7 +2786,7 @@ function IssueDetailPage() {
               <div className="detail-grid">
                 <span><MapPin size={17} /> {issue.wards?.name || issue.location_label || issue.city || 'Mumbai'}</span>
                 <span><ThumbsUp size={17} /> {issue.upvote_count || 0} {t('upvotes')}</span>
-                <span><Clock3 size={17} /> {formatDistanceToNow(new Date(issue.created_at), { addSuffix: true })}</span>
+                <span><Clock3 size={17} /> {timeAgo(issue.created_at, language)}</span>
                 {issue.reopen_count > 0 && <span><RotateCcw size={17} /> Reopened {issue.reopen_count} time{issue.reopen_count === 1 ? '' : 's'}</span>}
               </div>
               <div className="issue-action-strip">
@@ -2829,13 +2843,13 @@ function IssueDetailPage() {
                 {timeline.length ? timeline.map((item) => (
                   <div className="timeline-item" key={`${item.action}-${item.created_at}`}>
                     <strong>{String(item.action || 'UPDATE').replace(/_/g, ' ')}</strong>
-                    <span>{item.actor_role || 'SYSTEM'} · {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}</span>
+                    <span>{item.actor_role || 'SYSTEM'} · {timeAgo(item.created_at, language)}</span>
                     {item.note && <p>{item.note}</p>}
                   </div>
                 )) : (
                   <div className="timeline-item">
                     <strong>CREATED</strong>
-                    <span>CITIZEN · {formatDistanceToNow(new Date(issue.created_at), { addSuffix: true })}</span>
+                    <span>CITIZEN · {timeAgo(issue.created_at, language)}</span>
                   </div>
                 )}
               </div>
@@ -2972,11 +2986,11 @@ function ProfileSettingsPage() {
             <div className="profile-actions">
               <button className="button secondary" type="button" onClick={() => avatarInputRef.current?.click()} disabled={uploadAvatar.isPending}>
                 {uploadAvatar.isPending ? <Loader2 size={17} className="spin" /> : <Upload size={17} />}
-                Change photo
+                {t('changePhoto')}
               </button>
               {avatarPreview && (
                 <button className="button secondary danger-button" type="button" onClick={() => removeAvatar.mutate()} disabled={removeAvatar.isPending}>
-                  Remove
+                  {t('remove')}
                 </button>
               )}
               <input ref={avatarInputRef} type="file" accept="image/*" onChange={pickAvatar} hidden />
@@ -3000,12 +3014,12 @@ function ProfileSettingsPage() {
 
           <label>
             {t('name')}
-            <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Your full name" />
+            <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t('fullName')} />
           </label>
 
           <label>
             {t('phone')}
-            <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Mobile number" />
+            <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder={t('phone')} />
           </label>
 
           <LanguageSelect label className="profile-language" />
@@ -3021,10 +3035,10 @@ function ProfileSettingsPage() {
             <input
               value={wardSearch}
               onChange={(event) => setWardSearch(event.target.value)}
-              placeholder="Search city, ward number, or ward name"
+              placeholder={t('searchWards')}
             />
             <div className="ward-options">
-              {locations.isLoading && <span className="muted-row">Loading wards...</span>}
+              {locations.isLoading && <span className="muted-row">{t('loadingWards')}</span>}
               {!locations.isLoading && locations.isError && <span className="muted-row">Could not load wards. Please try again later.</span>}
               {!locations.isLoading && !locations.isError && visibleWards.map((ward) => (
                 <button
@@ -3037,7 +3051,7 @@ function ProfileSettingsPage() {
                   <span>{formatWard(ward)}</span>
                 </button>
               ))}
-              {!locations.isLoading && !locations.isError && !visibleWards.length && <span className="muted-row">No wards found for this search.</span>}
+              {!locations.isLoading && !locations.isError && !visibleWards.length && <span className="muted-row">{t('noWards')}</span>}
             </div>
           </fieldset>
 
@@ -3938,6 +3952,7 @@ export default function App() {
       <Route path="/headlines" element={<HeadlinesPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/privacy" element={<><SEOHead title="CivicsPulse privacy notice" description="How CivicsPulse uses account information, public civic reports and optional permissions." canonicalPath="/privacy" /><AppShell><PrivacyNotice /></AppShell></>} />
       <Route path="/profile" element={<ProfileSettingsPage />} />
       <Route path="/rep" element={<RepresentativeDeskPage />} />
       <Route path="/admin" element={<AdminImportPage />} />

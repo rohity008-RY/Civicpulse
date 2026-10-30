@@ -17,7 +17,7 @@ function getResetBaseUrl() {
 }
 
 function shouldReturnResetUrl() {
-  return process.env.NODE_ENV !== 'production' || process.env.PASSWORD_RESET_RETURN_LINK === 'true';
+  return process.env.NODE_ENV !== 'production' && process.env.PASSWORD_RESET_RETURN_LINK === 'true';
 }
 
 function buildResetUrl(token) {
@@ -57,6 +57,7 @@ async function sendPasswordResetEmail({ to, name, resetUrl }) {
     return { sent: false, reason: 'email_not_configured' };
   }
 
+  const escape = value => String(value || '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -68,55 +69,39 @@ async function sendPasswordResetEmail({ to, name, resetUrl }) {
       to,
       subject: 'Reset your CivicsPulse password',
       html: `
-        <p>Hello ${name || 'Citizen'},</p>
+        <p>Hello ${escape(name || 'Citizen')},</p>
         <p>Use this secure link to reset your CivicsPulse password. It expires in ${RESET_EXPIRY_MINUTES} minutes.</p>
-        <p><a href="${resetUrl}">Reset password</a></p>
+        <p><a href="${escape(resetUrl)}">Reset password</a></p>
         <p>If you did not request this, you can ignore this email.</p>
       `,
     }),
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    const error = new Error(`Password reset email failed: ${text}`);
-    error.status = response.status;
+    const error = new Error('Password reset email is temporarily unavailable');
+    error.status = 503;
     throw error;
   }
 
   return { sent: true };
 }
 
-async function consumePasswordReset(token) {
-  const tokenHash = hashResetToken(token);
-  const { data: resetRow, error } = await supabase
-    .from('password_reset_tokens')
-    .select('*, users(*)')
-    .eq('token_hash', tokenHash)
-    .is('used_at', null)
-    .maybeSingle();
-
-  if (error) throw error;
-  if (!resetRow || new Date(resetRow.expires_at).getTime() < Date.now()) {
+async function completePasswordReset(token, passwordHash) {
+  if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) {
     const invalid = new Error('Reset link is invalid or expired');
     invalid.status = 400;
     throw invalid;
   }
-
-  return resetRow;
-}
-
-async function markPasswordResetUsed(resetId) {
-  const { error } = await supabase
-    .from('password_reset_tokens')
-    .update({ used_at: new Date().toISOString() })
-    .eq('id', resetId);
-  if (error) throw error;
+  const { data, error } = await supabase.rpc('complete_password_reset', {
+    p_token_hash: hashResetToken(token), p_password_hash: passwordHash,
+  });
+  if (error) throw Object.assign(new Error('Reset link is invalid or expired'), { status: 400 });
+  return data;
 }
 
 module.exports = {
   createPasswordReset,
-  consumePasswordReset,
-  markPasswordResetUsed,
+  completePasswordReset,
   sendPasswordResetEmail,
   shouldReturnResetUrl,
 };

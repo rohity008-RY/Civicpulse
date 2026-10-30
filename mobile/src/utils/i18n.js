@@ -1,4 +1,5 @@
 import { LANGUAGES, useLanguageStore } from '../store/languageStore';
+import { onboardingCopy } from './onboardingCopy';
 
 const en = {
   home: 'Home',
@@ -133,7 +134,7 @@ Object.assign(dictionaries.mr, {
 });
 
 export function t(language, key) {
-  return dictionaries[language]?.[key] || en[key] || key;
+  return onboardingCopy[language]?.[key] || dictionaries[language]?.[key] || onboardingCopy.en[key] || en[key] || key;
 }
 
 export function useT() {

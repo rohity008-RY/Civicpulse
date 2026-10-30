@@ -105,13 +105,13 @@ function canManageIssue(identity, issue) {
   if (!identity || !issue) return false;
   if (identity.is_admin) return true;
   if (identity.rep_type === 'CORPORATOR') {
-    return issue.corporator_id === identity.rep_id || issue.ward_id === identity.ward_id;
+    return Boolean((identity.rep_id && issue.corporator_id === identity.rep_id) || (identity.ward_id && issue.ward_id === identity.ward_id));
   }
   if (identity.rep_type === 'MLA') {
-    return issue.mla_id === identity.rep_id || issue.zone_id === identity.zone_id;
+    return Boolean((identity.rep_id && issue.mla_id === identity.rep_id) || (identity.zone_id && issue.zone_id === identity.zone_id));
   }
   if (identity.rep_type === 'MP') {
-    return issue.mp_id === identity.rep_id;
+    return Boolean(identity.rep_id && issue.mp_id === identity.rep_id);
   }
   return false;
 }
