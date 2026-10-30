@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const supabase = require('../config/supabase');
+const { redactAnonymousOwner } = require('../services/issuePrivacy');
 const { authenticate, optionalAuth, isRep, isAdminOrMod } = require('../middleware/auth');
 const { resolveRepresentatives, resolveRepresentativesByWard, resolveRepresentativesByHierarchy } = require('../services/geoService');
 const { computeSlaDeadline } = require('../services/slaService');
@@ -91,8 +92,7 @@ router.get('/', optionalAuth, async (req, res) => {
     }
 
     const languageCode = resolveRequestLanguage(req);
-    data.forEach(issue => { if (issue.is_anonymous) issue.users = null; });
-    const issues = await localizeIssues(data, languageCode);
+    const issues = await localizeIssues(data.map(issue => redactAnonymousOwner(issue, req.user)), languageCode);
     res.json({ issues, total: count, page: +page, limit: +limit, language_code: languageCode });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -118,8 +118,7 @@ router.get('/track/:publicId', optionalAuth, async (req, res) => {
     if (error || !issue) return res.status(404).json({ error: 'Issue not found' });
 
     const languageCode = resolveRequestLanguage(req);
-    if (issue.is_anonymous) issue.users = null;
-    const [localizedIssue] = await localizeIssues([issue], languageCode);
+    const [localizedIssue] = await localizeIssues([redactAnonymousOwner(issue, req.user)], languageCode);
     res.json({ issue: localizedIssue, language_code: languageCode });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -151,8 +150,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
     }
 
     const languageCode = resolveRequestLanguage(req);
-    if (issue.is_anonymous) issue.users = null;
-    const [localizedIssue] = await localizeIssues([issue], languageCode);
+    const [localizedIssue] = await localizeIssues([redactAnonymousOwner(issue, req.user)], languageCode);
     res.json({ issue: localizedIssue, language_code: languageCode });
   } catch (err) {
     res.status(500).json({ error: err.message });
